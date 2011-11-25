@@ -26,7 +26,7 @@ struct mds_plugin{
 typedef struct mds_elem_class {
 	const char* name;
 	MDSElem*(*request)(MDSServer* svr, CFJson* jConfStr);
-	int(*release)(MDSServer* svr, MDSElem* elem);
+	int(*release)(MDSElem* elem);
 }MdsElemClass;
 
 struct mds_server{
@@ -57,17 +57,22 @@ MDSElem* MDSServerRequestElem(MDSServer* svr, const char* elemClassName, CFJson*
     MdsElemClass* class;  \
     CFString name;    \
     CFGList* guests;    \
+    CFGList* vendors;	\
     int(*process)(MDSElem* this, MDSElem* vendor, void* data);  \
-    void(*addedAsGuest)(MDSElem* this, MDSElem* vendorElem);	\
-    void(*addedAsVendor)(MDSElem* this, MDSElem* guestElem); \
+    int(*addAsGuest)(MDSElem* this, MDSElem* vendorElem);	\
+    int(*addAsVendor)(MDSElem* this, MDSElem* guestElem); \
+    int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem);	\
+    int(*removeAsVendor)(MDSElem* this, MDSElem* guestElem); \
     CFListHead list
-struct mds_elem{
+struct mds_elem {
     MDS_ELEM_MEMBERS;
 };
 int MDSElemInit(MDSElem* this, MDSServer* server, MdsElemClass* class, const char* name, 
                     int(*process)(MDSElem* this, MDSElem* vendor, void* data),
-                    void(*addedAsGuest)(MDSElem* this, MDSElem* vendorElem),
-                    void(*addedAsVendor)(MDSElem* this, MDSElem* guestElem));
+                    int(*addedAsGuest)(MDSElem* this, MDSElem* vendorElem),
+                    int(*addedAsVendor)(MDSElem* this, MDSElem* guestElem),
+                    int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem),
+                    int(*removeAsVendor)(MDSElem* this, MDSElem* guestElem));
 int MDSElemExit(MDSElem* elem);
 #endif
 

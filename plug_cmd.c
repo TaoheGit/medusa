@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <assert.h>
 #include <cf_std.h>
 #include <cf_common.h>
 #include "mds_log.h"
@@ -31,11 +32,11 @@ typedef struct mds_cmd_plug{
 static int CmdPlugInit(MDSPlugin* this, MDSServer* svr);
 static int CmdPlugExit(MDSPlugin* this, MDSServer* svr);
 static MDSElem* _CmdElemRequested(MDSServer* svr, CFJson* jConf);
-static int _CmdElemReleased(MDSServer* svr, MDSElem* elem);
+static int _CmdElemReleased(MDSElem* elem);
 MdsElemClass _CmdClass = {
 	.name = MDS_CMD_ELEM_CLASS_NAME,
 	.request = _CmdElemRequested,
-	.release = _CmdElemReleased,
+	.release = _CmdElemReleased
 };
 
 MDSCmdPlug cmd = {
@@ -95,14 +96,24 @@ static int MDSCmdConnProcessRequest(MDSCmdSvrDataConn* dataConn, void* usrData)
     return ret;
 }
 
-static void MDSCmdElemAddedAsGuest(MDSElem* this, MDSElem* vendorElem)
+static int MDSCmdElemAddedAsGuest(MDSElem* this, MDSElem* vendorElem)
 {
-
+	return 0;
 }
 
-static void MDSCmdElemAddedAsVendor(MDSElem* this, MDSElem* guestElem)
+static int MDSCmdElemAddedAsVendor(MDSElem* this, MDSElem* guestElem)
 {
+	return 0;
+}
 
+static int MDSCmdElemRemoveAsGuest(MDSElem* this, MDSElem* vendorElem)
+{
+	return 0;
+}
+
+static int MDSCmdElemRemoveAsVendor(MDSElem* this, MDSElem* guestElem)
+{
+	return 0;
 }
 
 int MDSCmdElemInit(MDSCmdElem* this, MDSServer* svr, const char* name, const char* unixSockPath, int maxConns)
@@ -115,7 +126,9 @@ int MDSCmdElemInit(MDSCmdElem* this, MDSServer* svr, const char* name, const cha
     MP_CMD_DBG("\n");
     if(MDSElemInit((MDSElem*)this, svr, 
     		&_CmdClass, name, 
-    		MDSCmdElemProcess, MDSCmdElemAddedAsGuest, MDSCmdElemAddedAsVendor)){
+    		MDSCmdElemProcess, 
+    		MDSCmdElemAddedAsGuest, MDSCmdElemAddedAsVendor,
+    		MDSCmdElemRemoveAsGuest, MDSCmdElemRemoveAsVendor)){
         MP_CMD_ERR("\n");
         goto ERR_CMD_SVR_EXIT; 
     }
@@ -190,9 +203,10 @@ ERR_OUT:
 	return NULL;
 }
 
-static int _CmdElemReleased(MDSServer* svr, MDSElem* elem)
+static int _CmdElemReleased(MDSElem* elem)
 {
     MDS_DBG("\n");
+    assert(elem);
 	MDSCmdElemExit((MDSCmdElem*)elem);
 	MDS_DBG("\n");
 	free(elem);

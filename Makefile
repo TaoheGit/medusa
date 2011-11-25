@@ -1,8 +1,10 @@
 ############### configuration #################
 PROJ_NAME = medusa
 TARGETS = medusa plugins mdsctl
+CFLAGS += -Werror
 #VER =
 #RELEASE_PATH = 
+export CFLAGS
 ###############################################
 
 VER ?= $(shell cat VERSION)

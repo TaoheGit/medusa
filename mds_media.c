@@ -57,11 +57,12 @@ MdsVidStd MdsVidGetStdByRes(int width, int height)
 	return -1;
 }
 
-int MdsImgGetDataSize(MdsPixFmt pixFmt, int width, int height)
+int MdsImgGetImgSize(MdsPixFmt pixFmt, int width, int height)
 {
 	switch (pixFmt) {
 		case MDS_PIX_FMT_NV16:
         case MDS_PIX_FMT_NV61:
+        case MDS_PIX_FMT_YUYV:
 			return width*height*2;
         case MDS_PIX_FMT_H264:
             return width*height*2;
@@ -78,6 +79,7 @@ int MdsImgGetDataSize(MdsPixFmt pixFmt, int width, int height)
 static uint32 _v4l2_mds_pix_fmt_map[MDS_PIX_FMT_COUNT] = {
 	[MDS_PIX_FMT_NV16] =  V4L2_PIX_FMT_NV16,   /* YUV422 */
 	[MDS_PIX_FMT_NV61] =  V4L2_PIX_FMT_NV61,   /* YUV422 */
+	[MDS_PIX_FMT_YUYV] = V4L2_PIX_FMT_YUYV
 };
 
 MdsPixFmt MdsV4l2PixFmtToMdsPixFmt(uint32 v4l2PixFmt)
@@ -101,16 +103,18 @@ uint32 MdsMdsPixFmtToV4l2PixFmt(MdsPixFmt mdsPixFmt)
 	}
 }
 
-int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height, void* bufPtr)
+int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height, void* bufPtr, int bufSize)
 {	
 	if (pixFmt<0 || pixFmt>MDS_PIX_FMT_COUNT 
-			|| buf->width<0 || buf->height<0) {
+			|| buf->width<0 || buf->height<0
+			|| !bufPtr || bufSize <0) {
 		MDS_ERR_OUT(ERR_OUT, "\n");
 	}
 	buf->pixFmt = pixFmt;
 	buf->width = width;
 	buf->height = height;
 	buf->bufPtr = bufPtr;
+	buf->bufSize = bufSize;
 	return 0;
 ERR_OUT:
 	return -1;
@@ -121,13 +125,13 @@ void MdsImgBufExit(MdsImgBuf* buf)
     return;
 }
 
-MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height, void* bufPtr)
+MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height, void* bufPtr, int bufSize)
 {
 	MdsImgBuf* buf;
 	if (!(buf=malloc(sizeof(*buf)))) {
 		MDS_ERR_OUT(ERR_OUT, "\n");
 	}
-	if (MdsImgBufInit(buf, pixFmt, width, height, bufPtr)) {
+	if (MdsImgBufInit(buf, pixFmt, width, height, bufPtr, bufSize)) {
 		MDS_ERR_OUT(ERR_FREE_BUF, "\n");
 	}
 ERR_FREE_BUF:

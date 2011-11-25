@@ -22,11 +22,11 @@ CFLAGS += -s
 LDFLAGS += -s -O2
 endif
 
-#####################################
-TARGET = plug_cmd.so
+###################################################
+TARGET = plug_cmd.so plug_v4l2.so plug_file_sink.so
 OBJS = mds_cmd.o
 CFLAGS += $(CFLAGS_LIBCHUNFENG) -Wno-unused-label
-#####################################
+###################################################
 
 all:$(TARGET)
 

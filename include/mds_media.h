@@ -41,6 +41,7 @@ typedef enum {
 	MDS_PIX_FMT_INVALID  = -1,
 	MDS_PIX_FMT_NV16,   /* YUV422 */
 	MDS_PIX_FMT_NV61,   /* YUV422 */
+	MDS_PIX_FMT_YUYV,
 	MDS_PIX_FMT_H264,
 	MDS_PIX_FMT_MPEG4,
 	MDS_PIX_FMT_COUNT
@@ -54,12 +55,18 @@ struct mds_img_buf{
 	int width;
 	int height;
 	void* bufPtr;
+	int bufSize;	/* Maybe bigger than actual size needed */
 };
-int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height, void* bufPtr);
-MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height, void* bufPtr);
+int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height, 
+		void* bufPtr, int bufSize);
+MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height, 
+		void* bufPtr, int bufSize);
 #define MdsImgBufSetBufPtr(__buf, __bufPtr)  do {(__buf)->bufPtr =  (__bufPtr)}while(0)
+#define MdsImgBufGetPtr(__buf) ((__buf)->bufPtr)
 void MdsImgBufExit(MdsImgBuf* buf);
 void MdsImgBufFree(MdsImgBuf* buf);
-int MdsImgGetBufSize(MdsPixFmt pixFmt, int width, int height);
+int MdsImgGetImgSize(MdsPixFmt pixFmt, int width, int height);
+#define MdsImgBufGetImgSize(__buf) (MdsImgGetImgSize((__buf)->pixFmt, (__buf)->width, (__buf)->height))
+#define MdsImgBufGetBufSize(__buf) ((__buf)->bufSize)
 #endif
 
