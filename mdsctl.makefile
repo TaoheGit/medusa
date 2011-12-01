@@ -43,12 +43,12 @@ $(TARGET).$(VER):$(OBJS)
 	$(CC) $(LDFLAGS) $(LDFLAGS_LIBCHUNFENG) -o $@ $^
 
 install:
-	mkdir -p $(INSTALL_DIR)/usr/bin
-	cp -af ${TARGET} ${TARGET}.${VER} $(INSTALL_DIR)/usr/bin
+	mkdir -p $(prefix)/bin
+	cp -af ${TARGET} ${TARGET}.${VER} $(prefix)/bin
 
 	
 uninstall:
-	rm -rf $(INSTALL_DIR)/usr/bin/${TARGET} $(INSTALL_DIR)/usr/bin/${TARGET}.$(VER)
+	rm -rf $(prefix)/bin/${TARGET} $(prefix)/bin/${TARGET}.$(VER)
 
 	
 clean:

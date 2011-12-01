@@ -43,11 +43,12 @@ $(TARGET).$(VER):$(OBJS)
 	$(CC) -rdynamic $(LDFLAGS) $(LDFLAGS_LIBCHUNFENG) -ldl -o $@ $^
 
 install:
-	mkdir -p $(INSTALL_DIR)/usr/bin
-	cp -af ${TARGET} ${TARGET}.${VER} $(INSTALL_DIR)/usr/bin
+	mkdir -p $(prefix)/bin
+	cp -af ${TARGET} ${TARGET}.${VER} $(prefix)/bin
+	install -D examples/medusa.conf $(prefix)/etc/medusa.conf
 	
 uninstall:
-	rm -rf $(INSTALL_DIR)/usr/bin/${TARGET} $(INSTALL_DIR)/usr/bin/${TARGET}.$(VER)
+	rm -rf $(prefix)/bin/${TARGET} $(prefix)/bin/${TARGET}.$(VER)
 
 clean:
 	rm -rf test $(TARGET)  $(TARGET).${VER} *.o

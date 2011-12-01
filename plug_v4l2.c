@@ -1,3 +1,4 @@
+/* COPYRIGHT_CHUNFENG */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,9 @@
 #include "plug_v4l2.h"
 #include "mds_media.h"
 
+#ifndef MAX_V4L2_ELEMS
+#define MAX_V4L2_ELEMS	6
+#endif
 #define MDS_V4L2_ELEM_CLASS_NAME	"V4L2_ELEM"
 
 typedef struct v4l2_elem{
@@ -34,6 +38,7 @@ typedef struct v4l2_elem{
 #define MDS_V4L2_PLUGIN_NAME	"v4l2"
 typedef struct mds_v4l2_plug{
     MDS_PLUGIN_MEMBERS;
+    MdsV4l2Elem* v4l2Elems[MAX_V4L2_ELEMS];
 }MDSV4l2Plug;
 
 static int V4l2PlugInit(MDSPlugin* this, MDSServer* svr);
@@ -828,17 +833,51 @@ int MdsV4l2ElemDestroy(MdsV4l2Elem* vElem)
 
 static MDSElem* _V4l2ElemRequested(MDSServer* svr, CFJson* jConf)
 {
+	MDSElem *ret;
+	int i;
+	const char* tmpCStr;
+	
+	errno = -EINVAL;
 	if (!svr || !jConf) {
 		MDS_ERR_OUT(ERR_OUT, "\n");
 	}
-	return (MDSElem*)MdsV4l2ElemNewByJConf(svr, jConf);
+	tmpCStr = CFJsonObjectGetString(jConf, "device");
+	if (!tmpCStr) {
+	    MDS_ERR_OUT(ERR_OUT, "\n");
+	}
+	for (i=0; i<MAX_V4L2_ELEMS; i++) {
+	    if (v4l2.v4l2Elems[i] 
+	            && !strcmp(CFStringGetStr(&((MdsV4l2Elem*)v4l2.v4l2Elems[i])->device), tmpCStr)) {
+	        MDS_MSG("The v4l2 device: %s has been requested already.", tmpCStr);    
+	        return (MDSElem*)v4l2.v4l2Elems[i];
+	    }
+	}
+	ret = (MDSElem*)MdsV4l2ElemNewByJConf(svr, jConf);
+	if (!ret) {
+		MDS_ERR_OUT(ERR_OUT, "\n");
+	}
+	for (i=0; i<MAX_V4L2_ELEMS; i++) {
+		if (!v4l2.v4l2Elems[i]) {
+		    v4l2.v4l2Elems[i] = (MdsV4l2Elem*)ret;
+		    break;
+		}
+	}
+	return ret;
 ERR_OUT:
 	return NULL;
 }
 
 static int _V4l2ElemReleased(MDSElem* elem)
 {
+    int i;
+    
 	assert(elem);
+	for (i=0; i<MAX_V4L2_ELEMS; i++) {
+	    if (v4l2.v4l2Elems[i] == (MdsV4l2Elem*)elem) {
+	        v4l2.v4l2Elems[i] = NULL;
+	        break;
+	    }
+	}
 	return MdsV4l2ElemDestroy((MdsV4l2Elem*)elem);
 }
 

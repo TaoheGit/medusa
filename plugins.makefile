@@ -34,12 +34,12 @@ all:$(TARGET)
 	$(CC) -shared $(LDFLAGS) $(LDFLAGS_LIBCHUNFENG) -o $@ $^
 
 install:
-	mkdir -p $(INSTALL_DIR)/usr/lib/medusa
-	cp -af *.so $(INSTALL_DIR)/usr/lib/medusa
+	mkdir -p $(prefix)/lib/medusa
+	cp -af *.so $(prefix)/lib/medusa
 
 	
 uninstall:
-	rm -rf $(INSTALL_DIR)/usr/lib/medusa
+	rm -rf $(prefix)/lib/medusa
 
 	
 clean:
