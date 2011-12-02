@@ -1,4 +1,21 @@
-/* COPYRIGHT_CHUNFENG */
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301, USA.
+ *
+ */
+
 #include <string.h>
 #include "mds_log.h"
 #include "mds_media.h"
@@ -31,93 +48,93 @@ static struct  {int width; int height;} _VideoStdResAry[MDS_VID_STD_COUNT] = {
 
 int MdsVidStdGetWidth(MdsVidStd std)
 {
-	if (std<0 || std>MDS_VID_STD_COUNT) {
-		return -1;
-	}
-	return _VideoStdResAry[std].width;
+        if (std<0 || std>MDS_VID_STD_COUNT) {
+                return -1;
+        }
+        return _VideoStdResAry[std].width;
 }
 
 int MdsVidStdGetHeight(MdsVidStd std)
 {
-	if (std<0 || std>MDS_VID_STD_COUNT) {
-		return -1;
-	}
-	return _VideoStdResAry[std].height;
+        if (std<0 || std>MDS_VID_STD_COUNT) {
+                return -1;
+        }
+        return _VideoStdResAry[std].height;
 }
 
 MdsVidStd MdsVidGetStdByRes(int width, int height)
 {
-	int i;
-	
-	for (i=0; i<MDS_VID_STD_COUNT; i++) {
-		if (_VideoStdResAry[i].width == width && _VideoStdResAry[i].height == height) {
-			return i;
-		}
-	}
-	return -1;
+        int i;
+
+        for (i=0; i<MDS_VID_STD_COUNT; i++) {
+                if (_VideoStdResAry[i].width == width && _VideoStdResAry[i].height == height) {
+                        return i;
+                }
+        }
+        return -1;
 }
 
 int MdsImgGetImgSize(MdsPixFmt pixFmt, int width, int height)
 {
-	switch (pixFmt) {
-		case MDS_PIX_FMT_NV16:
+        switch (pixFmt) {
+                case MDS_PIX_FMT_NV16:
         case MDS_PIX_FMT_NV61:
         case MDS_PIX_FMT_YUYV:
-			return width*height*2;
+                        return width*height*2;
         case MDS_PIX_FMT_H264:
             return width*height*2;
         case MDS_PIX_FMT_MPEG4:
             return width*height*2;
         case MDS_PIX_FMT_COUNT:
             break;
-		case MDS_PIX_FMT_INVALID:
-		    break;
-	}
-	return -1;
+                case MDS_PIX_FMT_INVALID:
+                    break;
+        }
+        return -1;
 }
 
 static uint32 _v4l2_mds_pix_fmt_map[MDS_PIX_FMT_COUNT] = {
-	[MDS_PIX_FMT_NV16] =  V4L2_PIX_FMT_NV16,   /* YUV422 */
-	[MDS_PIX_FMT_NV61] =  V4L2_PIX_FMT_NV61,   /* YUV422 */
-	[MDS_PIX_FMT_YUYV] = V4L2_PIX_FMT_YUYV
+        [MDS_PIX_FMT_NV16] =  V4L2_PIX_FMT_NV16,   /* YUV422 */
+        [MDS_PIX_FMT_NV61] =  V4L2_PIX_FMT_NV61,   /* YUV422 */
+        [MDS_PIX_FMT_YUYV] = V4L2_PIX_FMT_YUYV
 };
 
 MdsPixFmt MdsV4l2PixFmtToMdsPixFmt(uint32 v4l2PixFmt)
 {
-	int i;
-	
-	for (i=0; i<MDS_PIX_FMT_COUNT; i++) {
-		if (_v4l2_mds_pix_fmt_map[i] == v4l2PixFmt) {
-			return i;
-		}
-	}
-	return MDS_PIX_FMT_INVALID;
+        int i;
+
+        for (i=0; i<MDS_PIX_FMT_COUNT; i++) {
+                if (_v4l2_mds_pix_fmt_map[i] == v4l2PixFmt) {
+                        return i;
+                }
+        }
+        return MDS_PIX_FMT_INVALID;
 }
 
 uint32 MdsMdsPixFmtToV4l2PixFmt(MdsPixFmt mdsPixFmt)
 {
-	if (mdsPixFmt<0 || mdsPixFmt>MDS_PIX_FMT_COUNT) {
-		return 0;
-	} else {
-		return _v4l2_mds_pix_fmt_map[mdsPixFmt];
-	}
+        if (mdsPixFmt<0 || mdsPixFmt>MDS_PIX_FMT_COUNT) {
+                return 0;
+        } else {
+                return _v4l2_mds_pix_fmt_map[mdsPixFmt];
+        }
 }
 
 int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height, void* bufPtr, int bufSize)
-{	
-	if (pixFmt<0 || pixFmt>MDS_PIX_FMT_COUNT 
-			|| buf->width<0 || buf->height<0
-			|| !bufPtr || bufSize <0) {
-		MDS_ERR_OUT(ERR_OUT, "\n");
-	}
-	buf->pixFmt = pixFmt;
-	buf->width = width;
-	buf->height = height;
-	buf->bufPtr = bufPtr;
-	buf->bufSize = bufSize;
-	return 0;
+{
+        if (pixFmt<0 || pixFmt>MDS_PIX_FMT_COUNT
+                        || buf->width<0 || buf->height<0
+                        || !bufPtr || bufSize <0) {
+                MDS_ERR_OUT(ERR_OUT, "\n");
+        }
+        buf->pixFmt = pixFmt;
+        buf->width = width;
+        buf->height = height;
+        buf->bufPtr = bufPtr;
+        buf->bufSize = bufSize;
+        return 0;
 ERR_OUT:
-	return -1;
+        return -1;
 }
 
 void MdsImgBufExit(MdsImgBuf* buf)
@@ -127,17 +144,17 @@ void MdsImgBufExit(MdsImgBuf* buf)
 
 MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height, void* bufPtr, int bufSize)
 {
-	MdsImgBuf* buf;
-	if (!(buf=malloc(sizeof(*buf)))) {
-		MDS_ERR_OUT(ERR_OUT, "\n");
-	}
-	if (MdsImgBufInit(buf, pixFmt, width, height, bufPtr, bufSize)) {
-		MDS_ERR_OUT(ERR_FREE_BUF, "\n");
-	}
+        MdsImgBuf* buf;
+        if (!(buf=malloc(sizeof(*buf)))) {
+                MDS_ERR_OUT(ERR_OUT, "\n");
+        }
+        if (MdsImgBufInit(buf, pixFmt, width, height, bufPtr, bufSize)) {
+                MDS_ERR_OUT(ERR_FREE_BUF, "\n");
+        }
 ERR_FREE_BUF:
-	free(buf);
+        free(buf);
 ERR_OUT:
-	return NULL;
+        return NULL;
 }
 
 void MdsImgBufFree(MdsImgBuf* buf)

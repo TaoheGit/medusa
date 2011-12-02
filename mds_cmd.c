@@ -1,3 +1,21 @@
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301, USA.
+ *
+ */
+
 #define _GNU_SOURCE             /* for accept4 */
 #include <sys/types.h>          /* See NOTES */
 #include <sys/socket.h>
@@ -28,7 +46,7 @@ int MDSCmdReqChksum(MDSCmdReq* req)
 BOOL MDSCmdReqChksumOK(MDSCmdReq* req)
 {
     /* TODO */
-    return TRUE;    
+    return TRUE;
 }
 
 int MDSCmdRespInit(MDSCmdResp* this)
@@ -76,7 +94,7 @@ int MDSCmdCtlInit(MDSCmdCtl* this, CFFdevents* events)
         this->async = FALSE;
         if(!(this->events = CFFdeventsNew())){
             MDS_ERR("\n");
-            goto ERR_EXIT_UNIX_SOCK_STR;              
+            goto ERR_EXIT_UNIX_SOCK_STR;
         }
     }
     if(MDSCmdReqInit(&this->request)){
@@ -89,7 +107,7 @@ int MDSCmdCtlInit(MDSCmdCtl* this, CFFdevents* events)
     }
     this->status = MDS_CMD_CTL_ST_IDLE;
     return 0;
-    
+
 //ERR_RESP_EXIT:
 //    MDSCmdRespExit(&this->response);
 ERR_REQ_EXIT:
@@ -108,7 +126,7 @@ static int MDSCmdCtlWritable(CFFdevents* events, CFFdevent* event, int fd, void*
 static int MDSCmdCtlReadable(CFFdevents* events, CFFdevent* event, int fd, void* data);
 
 int MDSCmdCtlConnect(MDSCmdCtl* this, const char* unixSockPath)
-{   
+{
     if(this->status != MDS_CMD_CTL_ST_IDLE){
         MDS_ERR("\n");
         return -1;
@@ -153,7 +171,7 @@ int MDSCmdCtlRequest(MDSCmdCtl* this, const char* element, const char* reqData, 
     this->reqResult = MDS_CTL_REQ_RESULT_ERROR;
     this->tmpWrited = 0;
     CFFdeventsAdd(this->events, &this->writeEvt);
-    this->status = MDS_CMD_CTL_ST_WRITE_REQ_VER;    
+    this->status = MDS_CMD_CTL_ST_WRITE_REQ_VER;
     if(!this->async){   /* sync request */
        return CFFdeventsLoop(this->events);
     }
@@ -226,7 +244,7 @@ int MDSCmdCtlWritable(CFFdevents* events, CFFdevent* event, int fd, void* data)
     return 0;
 ERR_TO_IDLE:
     MDSCmdCtlResetToIdle(this);
-    return -1;    
+    return -1;
 }
 
 int MDSCmdCtlReadable(CFFdevents* events, CFFdevent* event, int fd, void* data)
@@ -384,15 +402,15 @@ int MDSCmdSvrDataConnResponse(MDSCmdSvrDataConn* this)
     this->tmpWrited = 0;
     this->status = MDS_CMD_SVR_DATA_CONN_ST_WRITE_RESP_VER;
     CFFdeventsAdd(this->cmdSvr->events, &this->writeEvt);
-    
+
     return 0;
 }
 
 int MDSCmdSvrDataConnReadable(CFFdevents* events, CFFdevent* event, int fd, void* data)
-{   
+{
 #define this ((MDSCmdSvrDataConn*)data)
     switch(this->status){
-        
+
         case MDS_CMD_SVR_DATA_CONN_ST_READ_REQ_VER:
             MDS_DBG("server read version\n");
             if(CFAsyncRead(fd, this->request.version, MDS_CMD_PROTOCOL_VER_LEN, &this->tmpReaded)){
@@ -404,7 +422,7 @@ int MDSCmdSvrDataConnReadable(CFFdevents* events, CFFdevent* event, int fd, void
                 if(memcmp(this->request.version, MDS_CMD_PROTOCL_VER, MDS_CMD_PROTOCOL_VER_LEN)){
                     MDS_ERR("\n");
                     MDSCmdSvrDataConnFree(this);
-                    break;                    
+                    break;
                 }
                 this->tmpReaded = 0;
                 this->status = MDS_CMD_SVR_DATA_CONN_ST_READ_REQ_BODY_SIZE;
@@ -438,7 +456,7 @@ int MDSCmdSvrDataConnReadable(CFFdevents* events, CFFdevent* event, int fd, void
                 this->status = MDS_CMD_SVR_DATA_CONN_ST_READ_REQ_CHKSUM;
             }else{
                 break;
-            }            
+            }
         case MDS_CMD_SVR_DATA_CONN_ST_READ_REQ_CHKSUM:
             MDS_DBG("server read checksum\n");
             if(CFAsyncRead(fd, &this->request.chksum, sizeof(uint16), &this->tmpReaded)){
@@ -525,7 +543,7 @@ int MDSCmdSvrDataConnWriteable(CFFdevents* events, CFFdevent* event, int fd, voi
                 this->status = MDS_CMD_SVR_DATA_CONN_ST_IDLE;
                 MDSCmdSvrDataConnRequest(this);
             }
-            break;           
+            break;
         default:
             MDS_ERR("Shouldn't be here\n");
             goto ERR_FREE_DATA_CONN;
@@ -549,7 +567,7 @@ MDSCmdSvrDataConn* MDSCmdSvrDataConnNew(MDSCmdSvr* svr, int fd)
     if(MDSCmdSvrDataConnInit(newConn, svr, fd)){
         MDS_ERR("\n");
         free(newConn);
-        return NULL;        
+        return NULL;
     }
 
     return newConn;
@@ -573,7 +591,7 @@ int MDSCmdSvrDataConnInit(MDSCmdSvrDataConn* this, MDSCmdSvr* svr, int fd)
     CFListInit(&this->list);
     MDS_DBG("1=0x%x, 2=0x%x\n", (unsigned int)&svr->dataConnHead.list, (unsigned int)&this->list);
     CFListInsertPre(&svr->dataConnHead.list, &this->list);   /* Add data connection to server */
-    MDS_DBG("\n");    
+    MDS_DBG("\n");
     return 0;
 }
 
@@ -624,7 +642,7 @@ static int MDSCmdSvrSockReadable(CFFdevents* events, CFFdevent* event, int fd, v
 {
     int connFd;
     MDSCmdSvrDataConn* dConn;
-    
+
     if((connFd = accept(event->fd, NULL, NULL)) == -1){
         MDS_ERR("accept fd on unix socket failed\n");
         return -1;
@@ -639,12 +657,12 @@ static int MDSCmdSvrSockReadable(CFFdevents* events, CFFdevent* event, int fd, v
     return 0;
 }
 
-int MDSCmdSvrInit(MDSCmdSvr* this, const char* unixSockPath, int maxDataConns, 
-		int(*processRequest)(MDSCmdSvrDataConn* dataConn, void* usrData), void* usrData,
-		CFFdevents* events)
+int MDSCmdSvrInit(MDSCmdSvr* this, const char* unixSockPath, int maxDataConns,
+                int(*processRequest)(MDSCmdSvrDataConn* dataConn, void* usrData), void* usrData,
+                CFFdevents* events)
 {
     struct sockaddr_un addr;
-    
+
     MDS_DBG("\n");
     this->sockConn.cmdSvr = this;
     this->sockConn.unixSockPath = unixSockPath;
@@ -664,10 +682,10 @@ int MDSCmdSvrInit(MDSCmdSvr* this, const char* unixSockPath, int maxDataConns,
         goto ERR_CLOSE_SOCK_FD;
     }
     if (-1 == listen(this->sockConn.fd, maxDataConns)) {
-		MDS_ERR("listen failed: %s", strerror(errno));
+                MDS_ERR("listen failed: %s", strerror(errno));
         goto ERR_CLOSE_SOCK_FD;
-	}
-    if(CFFdeventInit(&this->sockConn.readEvt, 
+        }
+    if(CFFdeventInit(&this->sockConn.readEvt,
     this->sockConn.fd, MDSCmdSvrSockReadable, (void*)(&this->sockConn), NULL, NULL)){
         MDS_ERR("Can not initial unix socket for cmd element\n");
         goto ERR_CLOSE_SOCK_FD;

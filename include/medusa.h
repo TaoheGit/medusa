@@ -1,3 +1,21 @@
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301, USA.
+ *
+ */
+
 #ifndef _MEDUSA_H_
 #define _MEDUSA_H_
 #include <dlfcn.h>
@@ -24,9 +42,9 @@ struct mds_plugin{
 };
 
 typedef struct mds_elem_class {
-	const char* name;
-	MDSElem*(*request)(MDSServer* svr, CFJson* jConfStr);
-	int(*release)(MDSElem* elem);
+        const char* name;
+        MDSElem*(*request)(MDSServer* svr, CFJson* jConfStr);
+        int(*release)(MDSElem* elem);
 }MdsElemClass;
 
 struct mds_server{
@@ -57,17 +75,17 @@ MDSElem* MDSServerRequestElem(MDSServer* svr, const char* elemClassName, CFJson*
     MdsElemClass* class;  \
     CFString name;    \
     CFGList* guests;    \
-    CFGList* vendors;	\
+    CFGList* vendors;   \
     int(*process)(MDSElem* this, MDSElem* vendor, void* data);  \
-    int(*addAsGuest)(MDSElem* this, MDSElem* vendorElem);	\
+    int(*addAsGuest)(MDSElem* this, MDSElem* vendorElem);       \
     int(*addAsVendor)(MDSElem* this, MDSElem* guestElem); \
-    int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem);	\
+    int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem);    \
     int(*removeAsVendor)(MDSElem* this, MDSElem* guestElem); \
     CFListHead list
 struct mds_elem {
     MDS_ELEM_MEMBERS;
 };
-int MDSElemInit(MDSElem* this, MDSServer* server, MdsElemClass* class, const char* name, 
+int MDSElemInit(MDSElem* this, MDSServer* server, MdsElemClass* class, const char* name,
                     int(*process)(MDSElem* this, MDSElem* vendor, void* data),
                     int(*addedAsGuest)(MDSElem* this, MDSElem* vendorElem),
                     int(*addedAsVendor)(MDSElem* this, MDSElem* guestElem),

@@ -1,3 +1,21 @@
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301, USA.
+ * 
+ */
+ 
 #define  _GNU_SOURCE    /* for memrchr */
 #include <fcntl.h>
 #include <string.h>
@@ -40,7 +58,7 @@ int MDSCtlStdoutWriteable(CFFdevents* events, CFFdevent* event, int fd, void* ct
         MDSCTL_DBG("\n");
         CFFdeventsDel(&this->events, &this->stdoutEvt);
         CFFdeventsAdd(&this->events, &this->stdinEvt);
-        this->status = MDS_CTL_ST_READ_STDIN;        
+        this->status = MDS_CTL_ST_READ_STDIN;
     }
     return 0;
 #undef this
@@ -50,7 +68,7 @@ int MDSCtlStdinReadable(CFFdevents* events, CFFdevent* event, int fd, void* ctx)
 {
 #define this ((MDSCtl*)ctx)
     char *e, *p;
-    
+
     MDSCTL_DBG("stdin readable\n");
     CFBufferRead(fd, &this->stdinBuf, TRUE);
     MDSCTL_DBG("stdinBuf->size=%d\n", CFBufferGetSize(&this->stdinBuf));
@@ -90,10 +108,10 @@ static int MDSCtlSigFdReadable(CFFdevents* events, CFFdevent* event, int fd, voi
 int MDSCtlInit(MDSCtl* this)
 {
     int sigFd;
-    
+
     if(-1==(sigFd = CFSigFdOpen(SIGINT, SIGTERM))){
         MDSCTL_ERR("\n");
-        goto ERR_OUT;        
+        goto ERR_OUT;
     }
     if(CFFdeventInit(&this->sigFdEvent, sigFd, MDSCtlSigFdReadable, (void*)this, NULL, NULL)){
         MDSCTL_ERR("\n");
@@ -158,7 +176,7 @@ int MDSCtlExit(MDSCtl* this)
     CFFdeventExit(&this->stdinEvt);
     CFBufferExit(&this->stdoutBuf);
     CFBufferExit(&this->stdinBuf);
-    return -1;    
+    return -1;
 }
 
 int MDSCtlResetToIdle(MDSCtl* this)
@@ -168,7 +186,7 @@ int MDSCtlResetToIdle(MDSCtl* this)
             MDSCmdCtlResetToIdle(&this->cmdCtl);
             CFFdeventsDel(&this->events, &this->stdinEvt);
             CFFdeventsDel(&this->events, &this->sigFdEvent);
-            break;  
+            break;
         case MDS_CTL_ST_WRITE_STDOUT:
             MDSCmdCtlResetToIdle(&this->cmdCtl);
             CFFdeventsDel(&this->events, &this->stdoutEvt);
@@ -196,7 +214,7 @@ int MDSCtlRun(MDSCtl* this)
 int main(int argc, char** argv)
 {
     static MDSCtl ctl;
-    
+
     if(MDSCtlInit(&ctl)){
         MDSCTL_ERR_TO(ERR_OUT, "\n");
     }

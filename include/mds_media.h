@@ -1,5 +1,21 @@
-/* COPYRIGHT_CHUNFENG */
-#include <linux/videodev.h>
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301, USA.
+ *
+ */
+
 #include <linux/videodev2.h>
 #include <cf_common.h>
 #ifndef _MDS_MEDIA_H_
@@ -29,8 +45,8 @@ typedef enum {
     MDS_VID_STD_1080P_24, //{1920, 1080}
     MDS_VID_STD_1080P_60, //{1920, 1080}
     MDS_VID_STD_1080P_50, //{1920, 1080}
-	MDS_VID_STD_CUSTOM,
-    MDS_VID_STD_COUNT 
+        MDS_VID_STD_CUSTOM,
+    MDS_VID_STD_COUNT
 } MdsVidStd;
 
 int MdsVidStdGetWidth(MdsVidStd std);
@@ -38,29 +54,29 @@ int MdsVidStdGetHeight(MdsVidStd std);
 MdsVidStd MdsVidGetStdByRes(int width, int height);
 
 typedef enum {
-	MDS_PIX_FMT_INVALID  = -1,
-	MDS_PIX_FMT_NV16,   /* YUV422 */
-	MDS_PIX_FMT_NV61,   /* YUV422 */
-	MDS_PIX_FMT_YUYV,
-	MDS_PIX_FMT_H264,
-	MDS_PIX_FMT_MPEG4,
-	MDS_PIX_FMT_COUNT
+        MDS_PIX_FMT_INVALID  = -1,
+        MDS_PIX_FMT_NV16,   /* YUV422 */
+        MDS_PIX_FMT_NV61,   /* YUV422 */
+        MDS_PIX_FMT_YUYV,
+        MDS_PIX_FMT_H264,
+        MDS_PIX_FMT_MPEG4,
+        MDS_PIX_FMT_COUNT
 }MdsPixFmt;
 MdsPixFmt MdsV4l2PixFmtToMdsPixFmt(uint32 v4l2PixFmt);
 uint32 MdsMdsPixFmtToV4l2PixFmt(MdsPixFmt mdsPixFmt);
 
 typedef struct mds_img_buf MdsImgBuf;
 struct mds_img_buf{
-	MdsPixFmt pixFmt;
-	int width;
-	int height;
-	void* bufPtr;
-	int bufSize;	/* Maybe bigger than actual size needed */
+        MdsPixFmt pixFmt;
+        int width;
+        int height;
+        void* bufPtr;
+        int bufSize;    /* Maybe bigger than actual size needed */
 };
-int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height, 
-		void* bufPtr, int bufSize);
-MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height, 
-		void* bufPtr, int bufSize);
+int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height,
+                void* bufPtr, int bufSize);
+MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height,
+                void* bufPtr, int bufSize);
 #define MdsImgBufSetBufPtr(__buf, __bufPtr)  do {(__buf)->bufPtr =  (__bufPtr)}while(0)
 #define MdsImgBufGetPtr(__buf) ((__buf)->bufPtr)
 void MdsImgBufExit(MdsImgBuf* buf);

@@ -1,3 +1,21 @@
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301, USA.
+ *
+ */
+
 #ifndef _MDS_CMD_H_
 #define _MDS_CMD_H_
 #include <cf_common.h>
@@ -37,14 +55,14 @@ typedef struct mds_cmd_ctl{
     CFString unixSockPath;
     int fd;
     int(*processResponse)(struct mds_cmd_ctl* this);
-    
+
     CFFdevent readEvt;
     MDSCmdReq request;
     int tmpReaded;
     CFFdevent writeEvt;
     MDSCmdResp response;
     int tmpWrited;
-    
+
     CFFdevents* events;
     enum{
         MDS_CMD_CTL_ST_IDLE,
@@ -81,15 +99,15 @@ typedef struct mds_cmd_svr_sock_conn{
 typedef struct mds_cmd_svr_data_conn{
     MDSCmdSvr* cmdSvr;
     int fd;
-    
+
     CFFdevent readEvt;
     MDSCmdReq request;
-    int tmpReaded;    
+    int tmpReaded;
     CFFdevent writeEvt;
     MDSCmdResp response;
     int tmpWrited;
     enum{
-        MDS_CMD_SVR_DATA_CONN_ST_IDLE, 
+        MDS_CMD_SVR_DATA_CONN_ST_IDLE,
         MDS_CMD_SVR_DATA_CONN_ST_READ_REQ_VER,
         MDS_CMD_SVR_DATA_CONN_ST_READ_REQ_BODY_SIZE,
         MDS_CMD_SVR_DATA_CONN_ST_READ_REQ_BODY,
@@ -99,7 +117,7 @@ typedef struct mds_cmd_svr_data_conn{
         MDS_CMD_SVR_DATA_CONN_ST_WRITE_RESP_BODY_SIZE,
         MDS_CMD_SVR_DATA_CONN_ST_WRITE_RESP_BODY,
         MDS_CMD_SVR_DATA_CONN_ST_WRITE_RESP_CHKSUM
-        
+
     } status;
 
     CFListHead list;
@@ -111,15 +129,15 @@ int MDSCmdSvrDataConnExit(MDSCmdSvrDataConn* this);
 
 
 struct mds_cmd_svr{
-	void* usrData;
-	MDSCmdSvrSockConn	sockConn;
-	MDSCmdSvrDataConn dataConnHead;
+        void* usrData;
+        MDSCmdSvrSockConn       sockConn;
+        MDSCmdSvrDataConn dataConnHead;
     int(*processRequest)(MDSCmdSvrDataConn* dataConn, void* usrData);
     CFFdevents* events;
 };
-int MDSCmdSvrInit(MDSCmdSvr* this, const char* unixSockPath, int maxDataConns, 
-		int(*processRequest)(MDSCmdSvrDataConn* dataConn, void* usrData), void* usrData,
-		CFFdevents* events);
+int MDSCmdSvrInit(MDSCmdSvr* this, const char* unixSockPath, int maxDataConns,
+                int(*processRequest)(MDSCmdSvrDataConn* dataConn, void* usrData), void* usrData,
+                CFFdevents* events);
 int MDSCmdSvrExit(MDSCmdSvr* this);
 int MDSCmdSvrDataConnResponse(MDSCmdSvrDataConn* this);
 #endif

@@ -1,3 +1,21 @@
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301, USA.
+ *
+ */
+
 #include <dlfcn.h>  /* -ldl */
 #include <dirent.h>
 #include <errno.h>
@@ -14,7 +32,7 @@ static int load_plugin(MDSServer* svr, const char* plugPath, const char* plugNam
 {
     void* dlHndl;
     MDSPlugin* plugin;
-    
+
     dlHndl = dlopen(plugPath, RTLD_LAZY);
 
     if(!dlHndl){
@@ -48,7 +66,7 @@ int MDSServerLoadPlugins(MDSServer* svr)
     DIR *plugDir;
     CFString *dlPathStr;
     char plugName[MAX_PLUGIN_NAME_LEN];
-    
+
     if(!svr->plugDirPath){
         MDS_PLUG_ERR("Can not find plugin_dir entry in config file\n");
         goto ERR_OUT;
@@ -72,7 +90,7 @@ int MDSServerLoadPlugins(MDSServer* svr)
         if(strcmp(p, ".so"))
             continue;
         *p = '\0';
-        
+
         cf_string_safe_cp(dlPathStr, cf_string_get_str(svr->plugDirPath));
         cf_string_safe_cat(dlPathStr, "/");
         cf_string_safe_cat(dlPathStr, dent->d_name);
@@ -80,11 +98,11 @@ int MDSServerLoadPlugins(MDSServer* svr)
             MDS_PLUG_MSG("plugin: %s load failed!\n", dent->d_name);
         }
     }
-    
+
     cf_string_free(dlPathStr);
     closedir(plugDir);
     return 0;
-    
+
 ERR_FREE_PTH_STR:
     cf_string_free(dlPathStr);
 ERR_CLOSEDIR:
