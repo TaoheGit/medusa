@@ -1,7 +1,7 @@
 
    This application (Medusa) is dual licensed. The license for Medusa core part is
 GNU GPL V2. For more details about GPL V2 see below.
-Developers can make their various plugins under other commerical license.
+Developers can make their various plugins under any license.
 
 			Chunfeng Zhang
 
