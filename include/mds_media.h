@@ -45,7 +45,7 @@ typedef enum {
     MDS_VID_STD_1080P_24, //{1920, 1080}
     MDS_VID_STD_1080P_60, //{1920, 1080}
     MDS_VID_STD_1080P_50, //{1920, 1080}
-        MDS_VID_STD_CUSTOM,
+    MDS_VID_STD_CUSTOM,
     MDS_VID_STD_COUNT
 } MdsVidStd;
 
@@ -54,35 +54,75 @@ int MdsVidStdGetHeight(MdsVidStd std);
 MdsVidStd MdsVidGetStdByRes(int width, int height);
 
 typedef enum {
-        MDS_PIX_FMT_INVALID  = -1,
-        MDS_PIX_FMT_NV16,   /* YUV422 */
-        MDS_PIX_FMT_NV61,   /* YUV422 */
-        MDS_PIX_FMT_YUYV,
-        MDS_PIX_FMT_H264,
-        MDS_PIX_FMT_MPEG4,
-        MDS_PIX_FMT_COUNT
+    MDS_PIX_FMT_INVALID  = -1,
+    MDS_PIX_FMT_RGB332,
+    MDS_PIX_FMT_RGB444,
+    MDS_PIX_FMT_RGB555,
+    MDS_PIX_FMT_RGB565,
+    MDS_PIX_FMT_RGB555X,
+    MDS_PIX_FMT_RGB565X,
+    MDS_PIX_FMT_BGR24,
+    MDS_PIX_FMT_RGB24,
+    MDS_PIX_FMT_BGR32,
+    MDS_PIX_FMT_RGB32,
+    /* Bayer RGB formats */
+    MDS_PIX_FMT_SBGGR8,
+    MDS_PIX_FMT_SGBRG8,
+    MDS_PIX_FMT_SGRBG8,
+    MDS_PIX_FMT_SBGGR16,
+    /* Packed YUV formats */
+    MDS_PIX_FMT_YUV444,
+    MDS_PIX_FMT_YUV555,
+    MDS_PIX_FMT_YUV565,
+    MDS_PIX_FMT_YUV32,
+    /* Grey-scale image */
+    MDS_PIX_FMT_GREY,
+    MDS_PIX_FMT_Y16,
+    /* YUV formats */
+    MDS_PIX_FMT_UYVY,
+    MDS_PIX_FMT_YUYV,
+    MDS_PIX_FMT_VYUY,
+    MDS_PIX_FMT_YVYU,
+    MDS_PIX_FMT_Y41P,
+    MDS_PIX_FMT_YVU420,
+    MDS_PIX_FMT_YVU410,
+    MDS_PIX_FMT_YUV422P,
+    MDS_PIX_FMT_YUV411P,
+    MDS_PIX_FMT_NV12,
+    MDS_PIX_FMT_NV21,
+    MDS_PIX_FMT_NV16,
+    MDS_PIX_FMT_NV61,
+    /* Compressed Image Formats */
+    MDS_PIX_FMT_JPEG,
+    MDS_PIX_FMT_MPEG4,
+    MDS_PIX_FMT_H264,
+    MDS_PIX_FMT_COUNT
 }MdsPixFmt;
 MdsPixFmt MdsV4l2PixFmtToMdsPixFmt(uint32 v4l2PixFmt);
 uint32 MdsMdsPixFmtToV4l2PixFmt(MdsPixFmt mdsPixFmt);
 
+
+int MdsImgGetBitsPerPix(MdsPixFmt pixFmt);
+int MdsImgGetImgBufSize(MdsPixFmt pixFmt, int width, int height);
+
 typedef struct mds_img_buf MdsImgBuf;
 struct mds_img_buf{
-        MdsPixFmt pixFmt;
-        int width;
-        int height;
-        void* bufPtr;
-        int bufSize;    /* Maybe bigger than actual size needed */
+    MdsPixFmt pixFmt;
+    int width;
+    int height;
+    void* bufPtr;
+    int bufSize;    /* Maybe bigger than actual size needed */
 };
 int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height,
-                void* bufPtr, int bufSize);
+        void* bufPtr, int bufSize);
 MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height,
-                void* bufPtr, int bufSize);
+        void* bufPtr, int bufSize);
 #define MdsImgBufSetBufPtr(__buf, __bufPtr)  do {(__buf)->bufPtr =  (__bufPtr)}while(0)
 #define MdsImgBufGetPtr(__buf) ((__buf)->bufPtr)
 void MdsImgBufExit(MdsImgBuf* buf);
 void MdsImgBufFree(MdsImgBuf* buf);
-int MdsImgGetImgSize(MdsPixFmt pixFmt, int width, int height);
-#define MdsImgBufGetImgSize(__buf) (MdsImgGetImgSize((__buf)->pixFmt, (__buf)->width, (__buf)->height))
+int MdsImgBufConvFmt(MdsImgBuf* dst, MdsImgBuf* src);
+#define MdsImgBufGetImgBufSize(__buf) (MdsImgGetImgBufSize((__buf)->pixFmt, (__buf)->width, (__buf)->height))
 #define MdsImgBufGetBufSize(__buf) ((__buf)->bufSize)
 #endif
 

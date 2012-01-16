@@ -41,7 +41,7 @@ static int load_plugin(MDSServer* svr, const char* plugPath, const char* plugNam
     }
     plugin = dlsym(dlHndl, plugName);
     if(dlerror()){
-        MDS_PLUG_ERR("Can not find plugin symbol, which should be part of dl file name. Like plug_plugName.so");
+        MDS_PLUG_ERR("Can not find plugin symbol in %s\n", plugPath);
         goto ERR_DLCLOSE;
     }
     plugin->dlHandl = dlHndl;

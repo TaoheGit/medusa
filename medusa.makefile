@@ -16,18 +16,19 @@ else
 endif
 
 ifeq ($(DEBUG),y)
-CFLAGS += -g
+CFLAGS += -g -O3
 LDFLAGS += -g
 else
-CFLAGS += -s
-LDFLAGS += -s -O2
+CFLAGS += -s -O3
+LDFLAGS += -s -O3
 endif
 
 ################################
 
-OBJS = medusa.o mds_plugin.o mds_media.o
-CFLAGS += $(CFLAGS_LIBCHUNFENG) -Wno-unused-label
+OBJS = medusa.o mds_plugin.o mds_media.o mds_tools.o
+CFLAGS += -Wno-unused-label
 
+LDFLAGS += $(LDFLAGS_LIBCHUNFENG)
 ################################
 
 all:$(TARGET)
@@ -40,7 +41,7 @@ else
 endif
 
 $(TARGET).$(VER):$(OBJS)
-	$(CC) -rdynamic $(LDFLAGS) $(LDFLAGS_LIBCHUNFENG) -ldl -o $@ $^
+	$(CC) -rdynamic $(LDFLAGS) -ldl -o $@ $^
 
 install:
 	mkdir -p $(prefix)/bin

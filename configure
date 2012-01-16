@@ -1,6 +1,17 @@
 #!/bin/bash
-#CC=gcc
-#ENABLE_FCGI=no
+#	CC=gcc
+#   SUPPORT_DAVINCI_VPFE=no
+#	SUPPORT_DV_DMAI=no
+#	DV_CE_DIR=/home/chunfeng/projects/embuild/medusa/../codec-engine/install/codec-engine
+#	DV_DMAI_DIR=/home/chunfeng/projects/embuild/medusa/../dmai/install/dmai
+#	DV_FC_DIR=/home/chunfeng/projects/embuild/medusa/../framework-components/install/framework-components
+#	DV_XDAIS_DIR=/home/chunfeng/projects/embuild/medusa/../xdais/install/xdais
+#	DV_LINUX_UTILS_DIR=/home/chunfeng/projects/embuild/medusa/../linuxutils/install/linuxutils
+#	DV_CODECS_DM365_DIR=/home/chunfeng/projects/embuild/medusa/../codecs-dm365/install/codecs-dm365
+#	DV_XDC_TOOLS_DIR=/home/chunfeng/projects/embuild/medusa/../xdctools/install/xdctools
+#
+#   ENABLE_XMPP=no
+
 
 echo -n "" > config.mk
 until [ -z "$1" ]  # Until all parameters used up . . .

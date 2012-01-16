@@ -25,7 +25,7 @@ endif
 
 ################################
 
-OBJS = mdsctl.o mds_cmd.o
+OBJS = mdsctl.o
 CFLAGS += $(CFLAGS_LIBCHUNFENG) -Wno-unused-label
 
 ################################

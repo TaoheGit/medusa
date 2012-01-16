@@ -74,29 +74,71 @@ MdsVidStd MdsVidGetStdByRes(int width, int height)
         return -1;
 }
 
-int MdsImgGetImgSize(MdsPixFmt pixFmt, int width, int height)
+int MdsImgGetBitsPerPix(MdsPixFmt pixFmt)
 {
-        switch (pixFmt) {
-                case MDS_PIX_FMT_NV16:
-        case MDS_PIX_FMT_NV61:
-        case MDS_PIX_FMT_YUYV:
-                        return width*height*2;
-        case MDS_PIX_FMT_H264:
-            return width*height*2;
-        case MDS_PIX_FMT_MPEG4:
-            return width*height*2;
-        case MDS_PIX_FMT_COUNT:
-            break;
-                case MDS_PIX_FMT_INVALID:
-                    break;
-        }
-        return -1;
+    switch (pixFmt) {
+	case MDS_PIX_FMT_SBGGR8:
+	case MDS_PIX_FMT_NV12:
+	    return 8;
+	case MDS_PIX_FMT_NV16:
+	case MDS_PIX_FMT_NV61:
+	case MDS_PIX_FMT_YUYV:
+	case MDS_PIX_FMT_UYVY:
+	case MDS_PIX_FMT_SBGGR16:
+	    return 2<<3;
+	case MDS_PIX_FMT_H264:
+	    return 2<<3;
+	case MDS_PIX_FMT_MPEG4:
+	    return 2<<3;
+	case MDS_PIX_FMT_RGB24:
+	    return 3<<3;
+	case MDS_PIX_FMT_COUNT:
+	    break;
+	case MDS_PIX_FMT_INVALID:
+	    break;
+	default:
+	    break;
+    }
+    return -1;
+}
+
+int MdsImgGetImgBufSize(MdsPixFmt pixFmt, int width, int height)
+{
+    switch (pixFmt) {
+	case MDS_PIX_FMT_SBGGR8:
+	case MDS_PIX_FMT_NV12:
+	    return width*height*1;
+	case MDS_PIX_FMT_NV16:
+	case MDS_PIX_FMT_NV61:
+	case MDS_PIX_FMT_YUYV:
+	case MDS_PIX_FMT_UYVY:
+	case MDS_PIX_FMT_SBGGR16:
+	    return width*height*2;
+	case MDS_PIX_FMT_H264:
+	    return width*height*2;
+	case MDS_PIX_FMT_MPEG4:
+	    return width*height*2;
+	case MDS_PIX_FMT_RGB24:
+	    return width*height*3;
+	case MDS_PIX_FMT_COUNT:
+	    break;
+	case MDS_PIX_FMT_INVALID:
+	    break;
+	default:
+	    break;
+    }
+    return -1;
 }
 
 static uint32 _v4l2_mds_pix_fmt_map[MDS_PIX_FMT_COUNT] = {
-        [MDS_PIX_FMT_NV16] =  V4L2_PIX_FMT_NV16,   /* YUV422 */
-        [MDS_PIX_FMT_NV61] =  V4L2_PIX_FMT_NV61,   /* YUV422 */
-        [MDS_PIX_FMT_YUYV] = V4L2_PIX_FMT_YUYV
+    [MDS_PIX_FMT_NV16] =  V4L2_PIX_FMT_NV16,   /* YUV422 */
+    [MDS_PIX_FMT_NV61] =  V4L2_PIX_FMT_NV61,   /* YUV422 */
+    [MDS_PIX_FMT_YUYV] = V4L2_PIX_FMT_YUYV,
+    [MDS_PIX_FMT_UYVY] = V4L2_PIX_FMT_UYVY,
+    [MDS_PIX_FMT_SBGGR8] = V4L2_PIX_FMT_SBGGR8, 
+    [MDS_PIX_FMT_SBGGR16] = V4L2_PIX_FMT_SBGGR16,
+    [MDS_PIX_FMT_RGB24] = V4L2_PIX_FMT_RGB24,
+    [MDS_PIX_FMT_NV12] = V4L2_PIX_FMT_NV12,
 };
 
 MdsPixFmt MdsV4l2PixFmtToMdsPixFmt(uint32 v4l2PixFmt)
@@ -162,3 +204,225 @@ void MdsImgBufFree(MdsImgBuf* buf)
     free(buf);
 }
 
+
+int MdsImgConvFmtSbggr8ToRgb24(uint8_t* dst, const uint8_t* src, int width, int height)
+{
+    /* all blue place */
+    /* row 1 */
+
+    int i, j;
+    int idx, dIdx;
+    int lineEndIdx, leftColEndIdx, rightColEndIdx;
+    int tmp;
+    int dWidth;
+    int leftColEndIdxP1;
+
+    if (!dst || !src || width<4 || height<4) {
+        MDS_ERR("\n");
+        return -1;
+    }
+#if 1
+    dWidth = width<<1;
+    lineEndIdx = width - 1;
+    leftColEndIdx = width*(height-1);
+    rightColEndIdx = width*height-1;
+    leftColEndIdxP1 = leftColEndIdx+1;
+    
+    /* top left pixel B */    
+    dst[0] = src[0+width+1];
+    tmp = src[1];
+    tmp += src[width];
+    dst[0+1] = tmp>>1;
+    dst[0+2] = src[0];
+    
+    /* top right pixel G */
+    idx = lineEndIdx;
+    dst[idx*3] = src[idx+width];
+    dst[idx*3+1] = src[idx];
+    dst[idx*3+2] = src[idx-1];
+    
+    /* bottom left pixel G */
+    idx = leftColEndIdx;
+    dst[idx*3] = src[idx+1];
+    dst[idx*3+1] = src[idx];
+    dst[idx*3+2] = src[idx-width];
+    
+    /* bottome right pixel R */
+    idx = rightColEndIdx;
+    dst[idx*3] = src[idx];
+    tmp = src[idx-1];
+    tmp += src[idx-width];
+    dst[idx*3+1] = tmp>>1;
+    dst[idx*3+2] = src[idx-width-1];
+    
+    /* top side */
+    for (i=1; i<lineEndIdx; i+=2) {
+        /* G */
+        dst[i] = src[i+width];
+        dst[i+1] = src[i];
+        tmp = src[i-1];
+        tmp += src[i+1];
+        dst[i+2] = tmp>>1;
+        
+        /* B */
+        idx = i+1;
+        dIdx = idx*3;
+        tmp = src[idx-1+width];
+        tmp += src[idx+1+width];
+        dst[dIdx] = tmp>>1;
+        tmp = src[idx-1];
+        tmp += src[idx+1];
+        tmp += src[idx+width];
+        tmp += src[idx+1];
+        dst[dIdx+1] = tmp>>2;
+        dst[dIdx+2] = src[idx];
+    }
+    /* left side */
+    for (i=width; i<leftColEndIdx; i+=dWidth) {
+        /* G */
+        dIdx = i*3;
+        dst[dIdx] = src[i+1];
+        dst[dIdx+1] = src[i];
+        tmp = src[i-width];
+        tmp += src[i+width];
+        dst[dIdx+2] = tmp>>1;
+        /* B */
+        idx = i+width;
+        dIdx = idx*3;
+        tmp = src[idx+1-width];
+        tmp += src[idx+1+width];
+        dst[dIdx] = tmp>>1;
+        tmp = src[idx-width];
+        tmp += src[idx+width];
+        tmp += src[idx+1];
+        tmp += src[idx+1];
+        dst[dIdx+1] = tmp>>2;
+        dst[dIdx+2] = src[idx];
+    }
+    
+    /* right side */
+    for (i=width+width-1; i<rightColEndIdx; i+=dWidth) {
+        /* R */
+        dIdx = i*3;
+        dst[dIdx] = src[i];
+        tmp = src[i-width];
+        tmp += src[i+width];
+        tmp += src[i-1];
+        tmp += src[i-1];
+        dst[dIdx+1] = tmp>>2;
+        tmp = src[i-1-width];
+        tmp += src[i-1+width];
+        dst[dIdx+2] = tmp>>1;
+        
+        /* G */
+        idx = i+width;
+        dIdx = idx*3;
+        tmp = src[idx-width];
+        tmp += src[idx+width];
+        dst[dIdx] = tmp>>1;
+        dst[dIdx+1] = src[idx];
+        dst[dIdx+2] = src[idx-1];
+    }
+    
+    /* buttom side */
+    for (i=leftColEndIdxP1; i<rightColEndIdx; i+=2) {
+        /* R */
+        dIdx = i*3;
+        dst[dIdx] = src[i];
+        tmp = src[i-1];
+        tmp += src[i+1];
+        tmp += src[i-width];
+        tmp += src[i+1];
+        dst[dIdx+1] = tmp>>2;
+        tmp = src[i-width-1];
+        tmp += src[i-width+1];
+        dst[dIdx+2] = tmp>>1;
+        /* G */
+        idx = i+1;
+        dIdx = idx*3;
+        tmp = src[idx-1];
+        tmp += src[idx+1];
+        dst[dIdx] = tmp>>1;
+        dst[dIdx+1] = src[idx];
+        dst[dIdx+2] = src[idx-width];
+    }
+    
+    /* center */
+    for (i=width+1; i<leftColEndIdxP1; i+=dWidth) {
+        int lEnd = i+width-2;
+        for (j=i; j<lEnd; j+=2) {
+            /* R */
+            dIdx = j*3;
+            dst[dIdx] = src[j];
+            tmp = src[j-1];
+            tmp += src[j+1];
+            tmp += src[j-width];
+            tmp += src[j+width];
+            dst[dIdx+1] = tmp>>2;
+            tmp = src[j-width-1];
+            tmp += src[j-width+1];
+            tmp += src[j+width-1];
+            tmp += src[j+width+1];;
+            dst[dIdx+2] = tmp>>2;
+            
+            /* G */
+            idx = j+1;
+            dIdx = idx*3;
+            tmp = src[idx-1];
+            tmp += src[idx+1];
+            dst[dIdx] = tmp>>1;
+            dst[dIdx+1] = src[idx];
+            tmp = src[idx-width];
+            tmp += src[idx+width];
+            dst[dIdx+2] = tmp>>1;
+        }
+        lEnd = i+width+width-2;
+        for (j=i+width; j<lEnd; j+=2) {
+            /* G */
+            dIdx = j*3;
+            tmp = src[j-width];
+            tmp += src[j+width];
+            dst[dIdx] = tmp>>1;
+            dst[dIdx+1] = src[j];
+            tmp = src[j-1];
+            tmp += src[j+1];
+            dst[dIdx+2] = tmp>>1;
+            
+            /* B */
+            idx = j+1;
+            dIdx = idx*3;
+            tmp = src[idx-width-1];
+            tmp += src[idx-width+1];
+            tmp += src[idx+width-1];
+            tmp += src[idx+width+1];
+            dst[dIdx] = tmp>>2;
+            tmp = src[idx-1];
+            tmp += src[idx+1];
+            tmp += src[idx-width];
+            tmp += src[idx+width];
+            dst[dIdx+1] = tmp>>2;
+            dst[dIdx+2] = src[idx];
+        }
+    }
+#endif
+    return 0;
+}
+
+int MdsImgConvFmt(void* dst, void* src, MdsPixFmt dstFmt, MdsPixFmt srcFmt, int width, int height)
+{
+    if (srcFmt == MDS_PIX_FMT_SBGGR8 && dstFmt == MDS_PIX_FMT_RGB24) {
+        return MdsImgConvFmtSbggr8ToRgb24(dst, src, width, height);
+    } else {
+        MDS_ERR("This colorspace convertion not supported yet!! Please fix me\n");
+        return -1;
+    }
+}
+
+int MdsImgBufConvFmt(MdsImgBuf* dst, MdsImgBuf* src)
+{
+    if (dst->width-src->width || dst->height-src->height) { 
+        MDS_ERR("\n");
+        return -1;
+    }
+    return MdsImgConvFmt(dst->bufPtr, src->bufPtr, dst->pixFmt, src->pixFmt, dst->width, dst->height);
+}

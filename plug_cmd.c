@@ -26,21 +26,21 @@
 #include <assert.h>
 #include <cf_std.h>
 #include <cf_common.h>
-#include "mds_log.h"
-#define MP_CMD_DBG  CF_DBG
-#define MP_CMD_ERR  CF_ERR
-#define MP_CMD_MSG  CF_MSG
 #include <cf_fdevent.h>
 #include <cf_json.h>
-#include "mds_cmd.h"
+#include <cf_cmd.h>
+#include "medusa.h"
+#include "plug_cmd.h"
+#include "mds_log.h"
 
-#define MDS_CMD_PLUGIN_NAME "cmd"
+#define MDS_CMD_PLUGIN_NAME "PLUG_CMD"
 #define MDS_CMD_ELEM_CLASS_NAME  "CMD"
 #define MDS_CMD_DEF_MAX_CONNS   (100)
-typedef struct mds_cmd_elem{
+typedef struct mds_cmd_elem MDSCmdElem;
+struct mds_cmd_elem{
     MDS_ELEM_MEMBERS;
-    MDSCmdSvr cmdSvr;
-}MDSCmdElem;
+    CFCmdSvr cmdSvr;
+};
 
 typedef struct mds_cmd_plug{
     MDS_PLUGIN_MEMBERS;
@@ -62,100 +62,174 @@ MDSCmdPlug cmd = {
     .exit = CmdPlugExit
 };
 
-int MDSCmdElemProcess(MDSElem* this, MDSElem* vendor, void* data)
+static void UsageToBuffer(CFBuffer* buf)
 {
-    MDSCmdSvrDataConn* dataConn;
+    CFBufferCat(buf, CF_CONST_STR_LEN("Commands list:\n"));
+    CFBufferCat(buf, CF_CONST_STR_LEN("help\tdisplay this help message\n"));
+    CFBufferCat(buf, CF_CONST_STR_LEN("ping\t\n"));
+    CFBufferCat(buf, CF_CONST_STR_LEN("list_elements\t\n"));
+    CFBufferCat(buf, CF_CONST_STR_LEN("element_info <name>\t\n"));            
+}
 
-    dataConn = data;
-    if(!strcmp(vendor->class->name, MDS_CMD_ELEM_CLASS_NAME)){
-        CFString tmpStr;
-        CFStringInit(&tmpStr, "");
-        MDS_DBG("request=%x, size=%lu\n",
-                        (unsigned int)CFBufferGetPtr(&dataConn->request.body),
-                dataConn->request.bodySize);
-        CFStringSafeCpN(&tmpStr, CFBufferGetPtr(&dataConn->request.body),
-                dataConn->request.bodySize);
-        MP_CMD_DBG("CMD element Got cmd: %s\n", CFStringGetStr(&tmpStr));
-        CFBufferCp(&dataConn->response.body, "pong\n", sizeof("pong\n")-1);
-        dataConn->response.bodySize = sizeof("pong\n")-1;
-        CFStringExit(&tmpStr);
-    }else{
-        MP_CMD_ERR("Cmd can not process such info, vendor class: %s\n", vendor->class->name);
+int MDSCmdElemProcess(MDSElem* this, MDSElem* vendor, MdsMsg* msg)
+{
+    MdsCmdMsg* cmdMsg;
+    const char* cmdStrPtr;
+    CFBuffer* respBuf;
+    const char *tmpCStr;
+    
+    cmdMsg = msg->data;
+    cmdStrPtr = cmdMsg->cmd;
+    respBuf = cmdMsg->respBuf;
+    if(!strcmp(msg->type, MDS_MSG_TYPE_CMD)) {
+        MDS_DBG("CMD element Got cmd: %s\n", cmdStrPtr);
+        if (!strcmp(cmdStrPtr, "help")) {
+            CFBufferCp(respBuf, CF_CONST_STR_LEN(""));
+            UsageToBuffer(respBuf);
+        } else if (!strcmp(cmdStrPtr, "ping")) {
+            CFBufferCp(respBuf, "pong\n", sizeof("pong\n")-1);
+        } else if (!strcmp(cmdStrPtr, "list_elements")) {
+            CFBufferCp(respBuf, CF_CONST_STR_LEN("[Name(Class)]\n"));
+            CFGListForeach(this->server->elements, node) {
+                tmpCStr = CFStringGetStr(&((MDSElem*)(node->data))->name);
+                CFBufferCat(respBuf, tmpCStr, strlen(tmpCStr));
+                CFBufferCat(respBuf, CF_CONST_STR_LEN("("));
+                tmpCStr = ((MDSElem*)(node->data))->class->name;
+                CFBufferCat(respBuf, tmpCStr, strlen(tmpCStr));
+                CFBufferCat(respBuf,  CF_CONST_STR_LEN(")\n"));
+            }
+        } else if (!strncmp(cmdStrPtr, "element_info", strlen("element_info"))) {
+            MDSElem* elem;
+            
+            if ((tmpCStr = strblank(cmdStrPtr)) 
+                    && (tmpCStr = strnblank(tmpCStr))
+                    && (elem = MDSServerFindElemByName(this->server, tmpCStr))) {
+                CFBufferCp(respBuf, CF_CONST_STR_LEN("[Vendors]\n"));
+                {CFGListForeach(elem->vendors, node) {
+                    tmpCStr = CFStringGetStr(&((MDSElem*)(node->data))->name);
+                    CFBufferCat(respBuf, tmpCStr, strlen(tmpCStr));
+                    CFBufferCat(respBuf, CF_CONST_STR_LEN("\n"));
+                }}
+                CFBufferCat(respBuf, CF_CONST_STR_LEN("[Guests]\n"));
+                {CFGListForeach(elem->guests, node) {
+                    tmpCStr = CFStringGetStr(&((MDSElem*)(node->data))->name);
+                    CFBufferCat(respBuf, tmpCStr, strlen(tmpCStr));
+                    CFBufferCat(respBuf, CF_CONST_STR_LEN("\n"));
+                }}
+            } else {
+                CFBufferCp(respBuf, CF_CONST_STR_LEN("No such element.\n"));
+            }
+        } else if (!strncmp(cmdStrPtr, "connect", sizeof("connect")-1)) {
+            char *guest, *vendor, *e;
+            
+            vendor = strblank(cmdStrPtr);
+            vendor = strnblank(vendor);
+            guest = strblank(vendor);
+            *guest = '\0';
+            guest = strnblank(guest+1);
+            if ((e = strblank(guest))) {
+                *e='\0';
+            }
+            MDS_DBG("do connect: %s ==> %s\n", vendor, guest);
+            if (MDSServerConnectElemsByName(this->server, vendor, guest)) {
+                CFBufferCp(respBuf, CF_CONST_STR_LEN("Fail\n"));
+            } else {
+                CFBufferCp(respBuf, CF_CONST_STR_LEN("OK\n"));
+            }
+        } else if (!strncmp(cmdStrPtr, "disconnect", sizeof("disconnect")-1)) {
+            char *guest, *vendor, *e;
+            
+            vendor = strblank(cmdStrPtr);
+            vendor = strnblank(vendor);
+            guest = strblank(vendor);
+            *guest = '\0';
+            guest = strnblank(guest+1);
+            if ((e = strblank(guest))) {
+                *e='\0';
+            }
+            MDS_DBG("do disconnect: %s =X=> %s\n", vendor, guest);
+            if (MDSServerDisConnectElemsByName(this->server, vendor, guest)) {
+                CFBufferCp(respBuf, CF_CONST_STR_LEN("Fail\n"));
+            } else {
+                CFBufferCp(respBuf, CF_CONST_STR_LEN("OK\n"));
+            }
+            MDS_DBG("\n");
+        } else {
+            CFBufferCp(respBuf, CF_CONST_STR_LEN("No such command.\n"));
+            UsageToBuffer(respBuf);
+        }
+    } else {
+        MDS_ERR("Cmd can not process such info, vendor class: %s\n", vendor->class->name);
         return -1;
     }
     return 0;
 }
 
-static int MDSCmdConnProcessRequest(MDSCmdSvrDataConn* dataConn, void* usrData)
+static int MDSCmdConnProcessRequest(CFBuffer* reqBuf, CFBuffer* respBuf, void* usrData)
 {
     MDSElem *cmdElem;
-    MDSElem *elem;
     int ret = 0;
-    CFString tmpStr;
-    BOOL found = FALSE;
-
-    CFStringInit(&tmpStr, "");
+    MdsCmdMsg msg;
+    const char* to;
+    
     cmdElem = usrData;
-    CFStringSafeCpN(&tmpStr, CFBufferGetPtr(&dataConn->request.body), dataConn->request.bodySize);
-    CFGListForeach(cmdElem->guests, node) {
-        elem = node->data;
-        if (!strcmp(CFStringGetStr(&tmpStr), CFStringGetStr(&elem->name))) {
-            found = TRUE;
-            ret |= elem->process(elem, cmdElem, dataConn);
-            break;
-        }
+    msg.cmd = strchr(CFBufferGetPtr(reqBuf), '\0');
+    msg.cmd ++;
+    msg.respBuf = respBuf;
+    to = CFBufferGetPtr(reqBuf);
+    if (!MDSServerFindElemByName(cmdElem->server, to)) {
+        CFBufferCp(respBuf, CONST_STR_LEN("unknown element:"));
+        CFBufferCat(respBuf, to, strlen(to));
+        CFBufferCat(respBuf, CONST_STR_LEN("\n"));
+    } else {
+        ret = MDSElemSendMsg(cmdElem, to, MDS_MSG_TYPE_CMD, &msg);
     }
-    if (!found) {
-        CFBufferCp(&dataConn->response.body, CONST_STR_LEN("unknown element\n"));
-        dataConn->response.bodySize += sizeof("unknown element\n")-1;
-    }
-    CFStringExit(&tmpStr);
     return ret;
 }
 
 static int MDSCmdElemAddedAsGuest(MDSElem* this, MDSElem* vendorElem)
 {
-        return 0;
+    return 0;
 }
 
 static int MDSCmdElemAddedAsVendor(MDSElem* this, MDSElem* guestElem)
 {
-        return 0;
+    return 0;
 }
 
 static int MDSCmdElemRemoveAsGuest(MDSElem* this, MDSElem* vendorElem)
 {
-        return 0;
+    return 0;
 }
 
 static int MDSCmdElemRemoveAsVendor(MDSElem* this, MDSElem* guestElem)
 {
-        return 0;
+    return 0;
 }
 
 int MDSCmdElemInit(MDSCmdElem* this, MDSServer* svr, const char* name, const char* unixSockPath, int maxConns)
 {
-    MP_CMD_DBG("\n");
-    if(MDSCmdSvrInit(&this->cmdSvr, unixSockPath, maxConns, MDSCmdConnProcessRequest, this, svr->fdevents)){
-        MP_CMD_ERR("\n");
+    MDS_DBG("\n");
+    if(CFCmdSvrInit(&this->cmdSvr, unixSockPath, maxConns, MDSCmdConnProcessRequest, this, svr->fdevents)){
+        MDS_ERR("\n");
         goto ERR_OUT;
     }
-    MP_CMD_DBG("\n");
+    MDS_DBG("\n");
     if(MDSElemInit((MDSElem*)this, svr,
                 &_CmdClass, name,
                 MDSCmdElemProcess,
                 MDSCmdElemAddedAsGuest, MDSCmdElemAddedAsVendor,
                 MDSCmdElemRemoveAsGuest, MDSCmdElemRemoveAsVendor)){
-        MP_CMD_ERR("\n");
+        MDS_ERR("\n");
         goto ERR_CMD_SVR_EXIT;
     }
-    MP_CMD_DBG("%s:%d\n", __FILE__, __LINE__);
+    MDS_DBG("%s:%d\n", __FILE__, __LINE__);
 
     return 0;
 ERR_ELEM_EXIT:
     MDSElemExit((MDSElem*)this);
 ERR_CMD_SVR_EXIT:
-    MDSCmdSvrExit(&this->cmdSvr);
+    CFCmdSvrExit(&this->cmdSvr);
 ERR_OUT:
     return -1;
 }
@@ -163,7 +237,7 @@ ERR_OUT:
 int MDSCmdElemExit(MDSCmdElem* this)
 {
     MDSElemExit((MDSElem*)this);
-    MDSCmdSvrExit(&this->cmdSvr);
+    CFCmdSvrExit(&this->cmdSvr);
     return 0;
 }
 
@@ -181,23 +255,22 @@ static int MDSCmdElemInitByJconf(MDSCmdElem* cElem, MDSServer* svr, CFJson* conf
     const char* name;
 
     if(!(name=CFJsonObjectGetString(conf, "name"))){
-        MP_CMD_ERR("\n");
+        MDS_ERR("\n");
         goto ERR_OUT;
     }
-    MP_CMD_MSG("Initiating CMD element: %s\n", name);
+    MDS_MSG("Initiating CMD element: %s\n", name);
     if(!(unixSockPath=CFJsonObjectGetString(conf, "unix_socket_path"))){
-        MP_CMD_ERR("\n");
+        MDS_ERR("\n");
         goto ERR_OUT;
     }
     if(CFJsonObjectGetInt(conf, "max_connections", &maxConns)){
         maxConns = MDS_CMD_DEF_MAX_CONNS;
     }
-    MP_CMD_DBG("\n");
+    MDS_DBG("\n");
     if(MDSCmdElemInit(cElem, svr, name, unixSockPath, maxConns)){
-        MP_CMD_ERR("\n");
+        MDS_ERR("\n");
         goto ERR_OUT;
     }
-    MP_CMD_DBG("%s:%d\n", __FILE__, __LINE__);
     return 0;
 ERR_OUT:
     return -1;
@@ -205,42 +278,41 @@ ERR_OUT:
 
 static MDSElem* _CmdElemRequested(MDSServer* svr, CFJson* jConf)
 {
-        MDSElem* ret;
+    MDSElem* ret;
 
-        if (!(ret = (MDSElem*)malloc(sizeof(MDSCmdElem)))) {
-                MDS_ERR_OUT(ERR_OUT, "\n");
-        }
-        if (MDSCmdElemInitByJconf((MDSCmdElem*)ret, svr, jConf)) {
-                MDS_ERR_OUT(ERR_FREE, "\n")
-        }
-        return ret;
+    if (!(ret = (MDSElem*)malloc(sizeof(MDSCmdElem)))) {
+        MDS_ERR_OUT(ERR_OUT, "\n");
+    }
+    if (MDSCmdElemInitByJconf((MDSCmdElem*)ret, svr, jConf)) {
+        MDS_ERR_OUT(ERR_FREE, "\n")
+    }
+    return ret;
 ERR_FREE:
-        free(ret);
+    free(ret);
 ERR_OUT:
-        return NULL;
+    return NULL;
 }
 
 static int _CmdElemReleased(MDSElem* elem)
 {
     MDS_DBG("\n");
     assert(elem);
-        MDSCmdElemExit((MDSCmdElem*)elem);
-        MDS_DBG("\n");
-        free(elem);
-        MDS_DBG("\n");
-        return 0;
+    MDSCmdElemExit((MDSCmdElem*)elem);
+    MDS_DBG("\n");
+    free(elem);
+    MDS_DBG("\n");
+    return 0;
 }
 
 static int CmdPlugInit(MDSPlugin* plg, MDSServer* svr)
 {
-    MP_CMD_MSG("Initiating plug_cmd\n");
-        return MDSServerRegistElemClass(svr, &_CmdClass);
+    MDS_MSG("Initiating "MDS_CMD_PLUGIN_NAME"\n");
+    return MDSServerRegistElemClass(svr, &_CmdClass);
 }
 
 static int CmdPlugExit(MDSPlugin* plg, MDSServer* svr)
 {
-    MP_CMD_MSG("Exiting plug_cmd\n");
-
-        return MDSServerAbolishElemClass(svr, &_CmdClass);
+    MDS_MSG("Exiting "MDS_CMD_PLUGIN_NAME"\n");
+    return MDSServerAbolishElemClass(svr, &_CmdClass);
 }
 

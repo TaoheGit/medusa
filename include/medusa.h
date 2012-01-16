@@ -66,17 +66,29 @@ int MDSServerRun(MDSServer* svr);
 MDSElem* MDSServerReuestElem(struct mds_server* this, const char* name, const char* jConfStr);
 int MDSServerReleaseElem(struct mds_server* svr, MDSElem* elem);
 //int MDSServerChainElems(struct mds_server* svr, MDSElem* elem, ...);
+int MDSServerConnectElemsByName(MDSServer* svr, const char* vendorElemName, const char* guestElemName);
+int MDSServerDisConnectElemsByName(MDSServer* svr, const char* vendorElemName, const char* guestElemName);
 int MDSServerRegistElemClass(MDSServer* svr, MdsElemClass* cls);
 int MDSServerAbolishElemClass(MDSServer* svr, MdsElemClass* cls);
 MDSElem* MDSServerRequestElem(MDSServer* svr, const char* elemClassName, CFJson* jConf);
+MDSElem* MDSServerFindElemByName(MDSServer* svr, const char* elemName);
+int MDSServerDisConnectElems(MDSElem* elem, MDSElem* guestElem);
+
+#define MDS_MSG_TYPE_LEN    10
+typedef struct mds_msg MdsMsg;
+struct mds_msg {
+    char type[MDS_MSG_TYPE_LEN+1];
+    void* data;
+};
 
 #define MDS_ELEM_MEMBERS  \
+    int ref;    \
     MDSServer* server;   \
     MdsElemClass* class;  \
     CFString name;    \
     CFGList* guests;    \
     CFGList* vendors;   \
-    int(*process)(MDSElem* this, MDSElem* vendor, void* data);  \
+    int(*process)(MDSElem* this, MDSElem* vendor, MdsMsg* msg);  \
     int(*addAsGuest)(MDSElem* this, MDSElem* vendorElem);       \
     int(*addAsVendor)(MDSElem* this, MDSElem* guestElem); \
     int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem);    \
@@ -85,12 +97,23 @@ MDSElem* MDSServerRequestElem(MDSServer* svr, const char* elemClassName, CFJson*
 struct mds_elem {
     MDS_ELEM_MEMBERS;
 };
-int MDSElemInit(MDSElem* this, MDSServer* server, MdsElemClass* class, const char* name,
-                    int(*process)(MDSElem* this, MDSElem* vendor, void* data),
-                    int(*addedAsGuest)(MDSElem* this, MDSElem* vendorElem),
-                    int(*addedAsVendor)(MDSElem* this, MDSElem* guestElem),
-                    int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem),
-                    int(*removeAsVendor)(MDSElem* this, MDSElem* guestElem));
+int MDSElemInit(MDSElem* this, MDSServer* server, MdsElemClass* class, const char* name, 
+        int(*process)(MDSElem* this, MDSElem* vendor, MdsMsg* msg),
+        int(*addedAsGuest)(MDSElem* this, MDSElem* vendorElem),
+        int(*addedAsVendor)(MDSElem* this, MDSElem* guestElem),
+        int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem),
+        int(*removeAsVendor)(MDSElem* this, MDSElem* guestElem));
+const char* MDSElemGetName(MDSElem* elem);
+int MDSElemGetVendorCount(MDSElem* elem);
+int MDSElemGetGuestCount(MDSElem* elem);
+BOOL MDSElemHasGuest(MDSElem* elem, MDSElem* guest);
+BOOL MDSElemHasVendor(MDSElem* elem, MDSElem* vendor);
+inline const char* MDSElemGetClassName(MDSElem* elem);
+int MDSElemCastMsg(MDSElem* elem, const char* type, void* data);
+int MDSElemSendMsg(MDSElem* elem, const char* guestName, const char* type, void* data);
 int MDSElemExit(MDSElem* elem);
+
+MDSElem* MDSElemRef(MDSElem* elem);
+void MDSElemUnref(MDSElem* elem);
 #endif
 
