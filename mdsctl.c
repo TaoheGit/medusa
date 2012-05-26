@@ -137,7 +137,8 @@ int MDSCtlInit(MDSCtl* this)
         MDS_ERR("\n");
         goto ERR_OUT;
     }
-    if(CFFdeventInit(&this->sigFdEvent, sigFd, MDSCtlSigFdReadable, (void*)this, NULL, NULL)){
+    if(CFFdeventInit(&this->sigFdEvent, sigFd, MDSCtlSigFdReadable, (void*)this, 
+			    NULL, NULL, NULL, NULL)){
         MDS_ERR("\n");
         goto ERR_SIGFD_CLOSE;
     }
@@ -149,10 +150,13 @@ int MDSCtlInit(MDSCtl* this)
     }
     fcntl(0, F_SETFL, fcntl(0, F_GETFL)|O_NONBLOCK);
     fcntl(1, F_SETFL, fcntl(1, F_GETFL)|O_NONBLOCK);
-    if(CFFdeventInit(&this->stdinEvt, 0, MDSCtlStdinReadable, this, NULL, NULL)){
+    if(CFFdeventInit(&this->stdinEvt, 0, MDSCtlStdinReadable, this, 
+			    NULL, NULL, NULL, NULL)){
         MDS_ERR_OUT(ERR_STDOUT_BUF_EXIT, "\n");
     }
-    if(CFFdeventInit(&this->stdoutEvt, 1, NULL, NULL, MDSCtlStdoutWriteable, this)){
+    if(CFFdeventInit(&this->stdoutEvt, 1, NULL, NULL, 
+			    MDSCtlStdoutWriteable, this,
+			    NULL, NULL)){
         MDS_ERR_OUT(ERR_STDIN_EVT_EXIT, "\n");
     }
     if(CFFdeventsInit(&this->events)){
@@ -243,9 +247,10 @@ int MDSCtlRun(MDSCtl* this, const char* elem, const char* msg)
                 !=write(1, CFBufferGetPtr(&this->cmdCtl.response.body), CFBufferGetSize(&this->cmdCtl.response.body)));
     }
 }
+
 void usage()
 {
-    puts("mdsctl <> [<element> <command>]");
+    puts("mdsctl [<element> <command>]");
 }
 
 int main(int argc, char** argv)
@@ -256,17 +261,17 @@ int main(int argc, char** argv)
     if (argc==3) {
         argv1 = argv[1];
         argv2 = argv[2];
-    }else if (argc==1) {
+    } else if (argc==1) {
         argv1 = NULL;
         argv2 = NULL;
     } else {
         usage();
         MDS_ERR_OUT(ERR_OUT, "\n");
     }
-    if(MDSCtlInit(&ctl)){
+    if (MDSCtlInit(&ctl)) {
         MDS_ERR_OUT(ERR_OUT, "\n");
     }
-    if(MDSCtlRun(&ctl, argv1, argv2)){
+    if (MDSCtlRun(&ctl, argv1, argv2)) {
         MDS_ERR_OUT(ERR_MDS_CTL_EXIT, "\n");
     }
     

@@ -48,86 +48,71 @@ static struct  {int width; int height;} _VideoStdResAry[MDS_VID_STD_COUNT] = {
 
 int MdsVidStdGetWidth(MdsVidStd std)
 {
-        if (std<0 || std>MDS_VID_STD_COUNT) {
-                return -1;
-        }
-        return _VideoStdResAry[std].width;
+	if (std<0 || std>MDS_VID_STD_COUNT) {
+		return -1;
+	}
+	return _VideoStdResAry[std].width;
 }
 
 int MdsVidStdGetHeight(MdsVidStd std)
 {
-        if (std<0 || std>MDS_VID_STD_COUNT) {
-                return -1;
-        }
-        return _VideoStdResAry[std].height;
+	if (std<0 || std>MDS_VID_STD_COUNT) {
+		return -1;
+	}
+	return _VideoStdResAry[std].height;
 }
 
 MdsVidStd MdsVidGetStdByRes(int width, int height)
 {
-        int i;
+	int i;
 
-        for (i=0; i<MDS_VID_STD_COUNT; i++) {
-                if (_VideoStdResAry[i].width == width && _VideoStdResAry[i].height == height) {
-                        return i;
-                }
-        }
-        return -1;
+	for (i=0; i<MDS_VID_STD_COUNT; i++) {
+		if (_VideoStdResAry[i].width == width && _VideoStdResAry[i].height == height) {
+			return i;
+		}
+	}
+	return -1;
 }
 
 int MdsImgGetBitsPerPix(MdsPixFmt pixFmt)
 {
     switch (pixFmt) {
-	case MDS_PIX_FMT_SBGGR8:
-	case MDS_PIX_FMT_NV12:
-	    return 8;
-	case MDS_PIX_FMT_NV16:
-	case MDS_PIX_FMT_NV61:
-	case MDS_PIX_FMT_YUYV:
-	case MDS_PIX_FMT_UYVY:
-	case MDS_PIX_FMT_SBGGR16:
-	    return 2<<3;
-	case MDS_PIX_FMT_H264:
-	    return 2<<3;
-	case MDS_PIX_FMT_MPEG4:
-	    return 2<<3;
-	case MDS_PIX_FMT_RGB24:
-	    return 3<<3;
-	case MDS_PIX_FMT_COUNT:
-	    break;
-	case MDS_PIX_FMT_INVALID:
-	    break;
-	default:
-	    break;
+		case MDS_PIX_FMT_SBGGR8:
+			return 8;
+		case MDS_PIX_FMT_NV12:
+			return (8*1.5);
+		case MDS_PIX_FMT_NV16:
+		case MDS_PIX_FMT_NV61:
+		case MDS_PIX_FMT_YUYV:
+		case MDS_PIX_FMT_UYVY:
+		case MDS_PIX_FMT_SBGGR16:
+			return 2<<3;
+		case MDS_PIX_FMT_H264:
+			return 2<<3;
+		case MDS_PIX_FMT_MPEG4:
+			return 2<<3;
+		case MDS_PIX_FMT_RGB24:
+			return 3<<3;
+		case MDS_PIX_FMT_COUNT:
+			break;
+		case MDS_PIX_FMT_INVALID:
+			break;
+		default:
+			break;
     }
     return -1;
 }
 
 int MdsImgGetImgBufSize(MdsPixFmt pixFmt, int width, int height)
 {
-    switch (pixFmt) {
-	case MDS_PIX_FMT_SBGGR8:
-	case MDS_PIX_FMT_NV12:
-	    return width*height*1;
-	case MDS_PIX_FMT_NV16:
-	case MDS_PIX_FMT_NV61:
-	case MDS_PIX_FMT_YUYV:
-	case MDS_PIX_FMT_UYVY:
-	case MDS_PIX_FMT_SBGGR16:
-	    return width*height*2;
-	case MDS_PIX_FMT_H264:
-	    return width*height*2;
-	case MDS_PIX_FMT_MPEG4:
-	    return width*height*2;
-	case MDS_PIX_FMT_RGB24:
-	    return width*height*3;
-	case MDS_PIX_FMT_COUNT:
-	    break;
-	case MDS_PIX_FMT_INVALID:
-	    break;
-	default:
-	    break;
-    }
-    return -1;
+    int bpp;
+    
+    bpp = MdsImgGetBitsPerPix(pixFmt);
+    if (bpp == -1) {
+		return -1;
+	} else {
+		return (width*height*bpp)>>3;
+	}
 }
 
 static uint32 _v4l2_mds_pix_fmt_map[MDS_PIX_FMT_COUNT] = {
@@ -143,40 +128,46 @@ static uint32 _v4l2_mds_pix_fmt_map[MDS_PIX_FMT_COUNT] = {
 
 MdsPixFmt MdsV4l2PixFmtToMdsPixFmt(uint32 v4l2PixFmt)
 {
-        int i;
+	int i;
 
-        for (i=0; i<MDS_PIX_FMT_COUNT; i++) {
-                if (_v4l2_mds_pix_fmt_map[i] == v4l2PixFmt) {
-                        return i;
-                }
-        }
-        return MDS_PIX_FMT_INVALID;
+	for (i=0; i<MDS_PIX_FMT_COUNT; i++) {
+		if (_v4l2_mds_pix_fmt_map[i] == v4l2PixFmt) {
+			return i;
+		}
+	}
+	return MDS_PIX_FMT_INVALID;
 }
 
 uint32 MdsMdsPixFmtToV4l2PixFmt(MdsPixFmt mdsPixFmt)
 {
-        if (mdsPixFmt<0 || mdsPixFmt>MDS_PIX_FMT_COUNT) {
-                return 0;
-        } else {
-                return _v4l2_mds_pix_fmt_map[mdsPixFmt];
-        }
+	if (mdsPixFmt<0 || mdsPixFmt>MDS_PIX_FMT_COUNT) {
+		return 0;
+	} else {
+		return _v4l2_mds_pix_fmt_map[mdsPixFmt];
+	}
 }
 
 int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height, void* bufPtr, int bufSize)
 {
-        if (pixFmt<0 || pixFmt>MDS_PIX_FMT_COUNT
-                        || buf->width<0 || buf->height<0
-                        || !bufPtr || bufSize <0) {
-                MDS_ERR_OUT(ERR_OUT, "\n");
-        }
-        buf->pixFmt = pixFmt;
-        buf->width = width;
-        buf->height = height;
-        buf->bufPtr = bufPtr;
-        buf->bufSize = bufSize;
-        return 0;
+	if (pixFmt<0 || pixFmt>MDS_PIX_FMT_COUNT
+			|| buf->width<0 || buf->height<0
+			|| !bufPtr || bufSize <0) {
+		MDS_ERR_OUT(ERR_OUT, "\n");
+	}
+	buf->pixFmt = pixFmt;
+	buf->width = width;
+	buf->height = height;
+	buf->bufPtr = bufPtr;
+	buf->bufSize = bufSize;
+    buf->imgBufSize = MdsImgGetImgBufSize(pixFmt, width, height);
+	return 0;
 ERR_OUT:
-        return -1;
+	return -1;
+}
+
+void MdsImgBufSetCompressionImgBufSize(MdsImgBuf* buf, int size)
+{
+    buf->imgBufSize = size;
 }
 
 void MdsImgBufExit(MdsImgBuf* buf)
@@ -186,17 +177,17 @@ void MdsImgBufExit(MdsImgBuf* buf)
 
 MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height, void* bufPtr, int bufSize)
 {
-        MdsImgBuf* buf;
-        if (!(buf=malloc(sizeof(*buf)))) {
-                MDS_ERR_OUT(ERR_OUT, "\n");
-        }
-        if (MdsImgBufInit(buf, pixFmt, width, height, bufPtr, bufSize)) {
-                MDS_ERR_OUT(ERR_FREE_BUF, "\n");
-        }
+	MdsImgBuf* buf;
+	if (!(buf=malloc(sizeof(*buf)))) {
+		MDS_ERR_OUT(ERR_OUT, "\n");
+	}
+	if (MdsImgBufInit(buf, pixFmt, width, height, bufPtr, bufSize)) {
+		MDS_ERR_OUT(ERR_FREE_BUF, "\n");
+	}
 ERR_FREE_BUF:
-        free(buf);
+	free(buf);
 ERR_OUT:
-        return NULL;
+	return NULL;
 }
 
 void MdsImgBufFree(MdsImgBuf* buf)
@@ -408,9 +399,29 @@ int MdsImgConvFmtSbggr8ToRgb24(uint8_t* dst, const uint8_t* src, int width, int 
     return 0;
 }
 
+static int MdsImgConvFmtYuyvToUyvy(uint8_t* dst, const uint8_t* src, int width, int height)
+{
+    /* copy y */
+    int count;
+    int i;
+    
+    count = width*height*2;
+    for (i=0; i<count; i+=2) {
+        dst[i+1] = src[i];
+    }
+    
+    /* copy uv */
+    for (i=1; i<count; i+=2) {
+        dst[i-1] = src[i];
+    }
+    return 0;
+}
+
 int MdsImgConvFmt(void* dst, void* src, MdsPixFmt dstFmt, MdsPixFmt srcFmt, int width, int height)
 {
-    if (srcFmt == MDS_PIX_FMT_SBGGR8 && dstFmt == MDS_PIX_FMT_RGB24) {
+    if (srcFmt == MDS_PIX_FMT_YUYV && dstFmt == MDS_PIX_FMT_UYVY) {
+        return MdsImgConvFmtYuyvToUyvy(dst, src, width, height);
+    }else if (srcFmt == MDS_PIX_FMT_SBGGR8 && dstFmt == MDS_PIX_FMT_RGB24) {
         return MdsImgConvFmtSbggr8ToRgb24(dst, src, width, height);
     } else {
         MDS_ERR("This colorspace convertion not supported yet!! Please fix me\n");

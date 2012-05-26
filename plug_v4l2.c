@@ -25,6 +25,7 @@
  * output data: MDSImg
  * 
  */
+//#define _DEBUG_
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,6 +46,7 @@
 #include "plug_v4l2.h"
 #include "mds_media.h"
 #include "mds_tools.h"
+#include "plug_cmd.h"
 
 #ifndef MAX_V4L2_ELEMS
 #define MAX_V4L2_ELEMS  6
@@ -66,6 +68,8 @@ typedef struct v4l2_elem{
     CFFdevent fdEvent;
     int frameCount;  /* for fps calc */
     int enStats:1;
+    int countForDropFrame;
+    int dropFrame;
 }MdsV4l2Elem;
 
 #define MDS_V4L2_PLUGIN_NAME    "PLUG_V4L2"
@@ -241,9 +245,8 @@ static int __MDSV4l2ElemAddAsGuest(MDSElem* this, MDSElem* vendorElem)
     assert(vElem);
     switch (vElem->format.type) {
         case V4L2_BUF_TYPE_VIDEO_CAPTURE:
-            MDS_ERR("V4l2 Capture element shouldn't be added as guest!!\n");
-            ret = -1;
-                break;
+            return 0;
+            
         case V4L2_BUF_TYPE_VIDEO_OUTPUT:
             switch (vElem->req.memory) {
                 case V4L2_MEMORY_MMAP:
@@ -296,10 +299,11 @@ static int __MDSV4l2ElemAddAsVendor(MDSElem* this, MDSElem* guestElem)
         case V4L2_BUF_TYPE_VIDEO_CAPTURE:
             switch (vElem->req.memory) {
                 case V4L2_MEMORY_MMAP:
-                    if (!vElem->guests) {       /* start streaming only first time being added as vendor */
+                	MDS_DBG("gustCount=%d\n"MDSElemGetGuestCount(this));
+                    if (MDSElemGetGuestCount(this) == 1) {       /* start streaming only first time being added as vendor */
                         t = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                         if ((ret=ioctl(vElem->fd, VIDIOC_STREAMON, &t))) {
-                            MDS_ERR("VIDIOC_STREAMON\n");
+                            MDS_ERR("VIDIOC_STREAMON error:%s\n", strerror(errno));
                         }
                         CFFdeventsAdd(vElem->server->fdevents, &vElem->fdEvent);
                     }
@@ -325,22 +329,51 @@ static int __MDSV4l2ElemAddAsVendor(MDSElem* this, MDSElem* guestElem)
     return ret;
 }
 
-static int __MDSV4l2ElemProcess(MDSElem* this, MDSElem* vendor, MdsMsg* data)
+static int __MDSV4l2ElemProcess(MDSElem* this, MDSElem* vendor, MdsMsg* msg)
 {
     MdsV4l2Elem* vElem;
     int ret = 0;
     struct v4l2_buffer buf;
     MdsImgBuf* vImg;
+    int tmpInt;
 
     vElem = (MdsV4l2Elem*)this;
     assert(vElem);
     switch (vElem->format.type) {
         case V4L2_BUF_TYPE_VIDEO_CAPTURE:
-            MDS_ERR("V4l2 Capture element can not process anything!!\n");
-            ret = -1;
-                break;
+		    if (!strcmp(msg->type, MDS_MSG_TYPE_CMD)) { /* JSON message */
+				const char *jMsgStr;
+				CFBuffer *respBuf;
+				CFJson *jMsg;
+				
+				jMsgStr = ((MdsCmdMsg*)msg->data)->cmd;
+				respBuf = ((MdsCmdMsg*)msg->data)->respBuf;
+				MDS_DBG("jMsgStr:%s\n", jMsgStr);
+				jMsg = CFJsonParse(jMsgStr);
+				if (!jMsg) {
+					MDS_ERR("Wrong json format\n");
+				    CFBufferCp(respBuf, CF_CONST_STR_LEN("{\"ret\":\"fail\"}\n"));
+				    return 0;
+				}
+				if (!CFJsonObjectGetInt(jMsg, "drop_frame", &tmpInt)) {
+					if (tmpInt > 0) {
+						MDS_DBG("dropFrame=%d\n", tmpInt);
+						vElem->dropFrame = tmpInt;
+						vElem->countForDropFrame = 0;
+					} else {
+						MDS_DBG("no drop frame\n");
+						vElem->dropFrame = 0;
+						vElem->countForDropFrame = 0;
+					}
+				    CFBufferCp(respBuf, CF_CONST_STR_LEN("{\"ret\":\"ok\"}\n"));
+				} else {
+				    CFBufferCp(respBuf, CF_CONST_STR_LEN("{\"ret\":\"fail\"}\n"));
+				}
+				CFJsonPut(jMsg);
+			}
+            break;
         case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-            vImg = (MdsImgBuf*)data;
+            vImg = (MdsImgBuf*)(msg->data);
             assert(vImg);
             switch (vElem->req.memory) {
                 case V4L2_MEMORY_MMAP:
@@ -401,8 +434,7 @@ static int __MDSV4l2ElemRemoveAsGuest(MDSElem* this, MDSElem* vendorElem)
     assert(vElem);
     switch (vElem->format.type) {
         case V4L2_BUF_TYPE_VIDEO_CAPTURE:
-            MDS_ERR("V4l2 Capture element shouldn't be deleted as guest!!\n");
-            ret = -1;
+            return 0;
             break;
         case V4L2_BUF_TYPE_VIDEO_OUTPUT:
             switch (vElem->req.memory) {
@@ -503,18 +535,28 @@ int __MdsV4l2CapMmapReadable(CFFdevents* events, CFFdevent* event, int fd, void*
         if (vElem->frameCount >= 64) {
             gettimeofday(&tv, NULL);
             delta = (tv.tv_sec - vElem->savedTime.tv_sec)*1000000;
+            
             if (tv.tv_usec > vElem->savedTime.tv_usec)
                 delta += (tv.tv_usec - vElem->savedTime.tv_usec);
             else 
                 delta += tv.tv_usec+(1000000-vElem->savedTime.tv_usec);
-            //MDS_MSG("\22[2k\n[%s] fps: %llu", MDSElemGetName((MDSElem*)vElem), (delta>>6));
+    
             MDS_MSG("[%s] fps: %llu\n", MDSElemGetName((MDSElem*)vElem), 1000000/(delta>>6));
+            
             vElem->frameCount = 0;
             vElem->savedTime = tv;
         }
     }
-
-    MDSElemCastMsg((MDSElem*)vElem, MDS_MSG_TYPE_IMAGE, &vElem->imgBufs[buf.index]);
+    MDS_DBG("dropFrame=%d,countForDropFrame=%d\n", vElem->dropFrame, vElem->countForDropFrame);
+	if (vElem->dropFrame > 0) {
+		vElem->countForDropFrame++;
+		if (vElem->countForDropFrame == vElem->dropFrame) {
+			MDSElemCastMsg((MDSElem*)vElem, MDS_MSG_TYPE_IMAGE, &vElem->imgBufs[buf.index]);
+			vElem->countForDropFrame = 0;
+		}
+	} else {
+    	MDSElemCastMsg((MDSElem*)vElem, MDS_MSG_TYPE_IMAGE, &vElem->imgBufs[buf.index]);
+    }
     
     if ((ret=ioctl(vElem->fd, VIDIOC_QBUF, &buf))) {
         MDS_ERR_OUT(ERR_OUT, "VIDIOC_QBUF\n");
@@ -694,7 +736,7 @@ int __MdsV4l2ElemInit(MdsV4l2Elem* vElem)
                 case V4L2_MEMORY_MMAP:
                     CFFdeventInit(&vElem->fdEvent, vElem->fd,
                             __MdsV4l2CapMmapReadable, vElem,
-                            NULL, NULL);
+                            NULL, NULL, NULL, NULL);
                     break;
                 case V4L2_MEMORY_USERPTR:
                     /* todo */
@@ -709,7 +751,7 @@ int __MdsV4l2ElemInit(MdsV4l2Elem* vElem)
                 case V4L2_MEMORY_MMAP:
                     CFFdeventInit(&vElem->fdEvent, vElem->fd,
                             __MdsV4l2OutputMmapReadable, vElem,
-                            NULL, NULL);
+                            NULL, NULL, NULL, NULL);
                     break;
                 case V4L2_MEMORY_USERPTR:
                     break;
@@ -769,7 +811,8 @@ int __MdsV4l2ElemEixt(MdsV4l2Elem* vElem)
         "count" : 4,
         "type" : "V4L2_BUF_TYPE_VIDEO_CAPTURE",
         "memory" : "V4L2_MEMORY_MMAP"
-    }
+    },
+    "drop_frame": -1
 }
 */
 int MdsV4l2ElemInitByJConf(MdsV4l2Elem* vElem, MDSServer* svr, CFJson* jConf)
@@ -846,6 +889,14 @@ int MdsV4l2ElemInitByJConf(MdsV4l2Elem* vElem, MDSServer* svr, CFJson* jConf)
         MDS_ERR_OUT(ERR_NAME_STR_EXIT,  "Get v4l2 req_bufs.count failed\n");
     }
     vElem->req.count = tmpInt;
+    
+    if (!CFJsonObjectGetInt(jConf, "drop_frame", &tmpInt) && tmpInt > 0) {
+    	vElem->dropFrame = tmpInt;
+    } else {
+    	vElem->dropFrame = 0;
+    }
+    vElem->countForDropFrame = 0;
+    
     if (-1 == __MdsV4l2ElemInit(vElem)) {
         MDS_ERR_OUT(ERR_NAME_STR_EXIT, "Init v4l2 device failed\n");
     }

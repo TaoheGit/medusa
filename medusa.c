@@ -25,6 +25,7 @@
 #include <cf_common.h>
 #include <cf_sigfd.h>
 #include <cf_errno.h>
+#include <cf_timer.h>
 #include "medusa.h"
 #include "mds_log.h"
 
@@ -37,6 +38,9 @@ static int MDSSigFdReadable(CFFdevents* events, CFFdevent* event, int fd, void* 
             MDSServerExitEventLoop((MDSServer*)ctx);
             break;
         case SIGPIPE:
+            break;
+        case SIGALRM:
+            CFTimersTrigger();
             break;
         default:
             MDS_ERR("unknown signal, should not be here\n");
@@ -59,11 +63,14 @@ int MDSServerInit(MDSServer* this, const char* cfgFile)
         MDS_ERR("\n");
         goto ERR_OUT;
     }
-    if(-1==(sigFd = CFSigFdOpen(SIGINT, SIGTERM, SIGPIPE, -1))){
+    if(-1==(sigFd = CFSigFdOpen(SIGINT, SIGTERM, SIGPIPE, SIGALRM, -1))){
         MDS_ERR("\n");
         goto ERR_FREE_FDEVENTS;
     }
-    if(CFFdeventInit(&this->sigFdEvent, sigFd, MDSSigFdReadable, (void*)this, NULL, NULL)){
+    if(CFFdeventInit(&this->sigFdEvent, sigFd, 
+                MDSSigFdReadable, (void*)this, 
+                NULL, NULL,
+                NULL, NULL)){
         MDS_ERR("\n");
         goto ERR_CLOSE_SIG_FD;
     }
@@ -99,9 +106,16 @@ int MDSServerInit(MDSServer* this, const char* cfgFile)
         MDS_ERR("Load plugins failed\n");
         goto ERR_FREE_SVR_PLUG_PATH;
     }
+    if (CFTimerSystemInit(-1)) {
+        MDS_ERR_OUT(ERR_RM_PLUGS, "CFTimerSystemInit() failed\n");
+    }
     assert(this->elemClasses);
     cf_string_free(gConfigString);
     return 0;
+ERR_EXIT_TIMER_SYSTEM:
+    CFTimerSystemExit();
+ERR_RM_PLUGS:
+    MDSServerRmPlugins(this);
 ERR_FREE_SVR_PLUG_PATH:
     cf_string_free(this->plugDirPath);
 ERR_PUT_GCONF:
@@ -129,7 +143,8 @@ int MDSServerExitEventLoop(MDSServer* this)
 int MDSServerExit(MDSServer* this)
 {
     int sigFd;
-
+    
+    CFTimerSystemExit();
     MDSServerRmPlugins(this);
     cf_string_free(this->plugDirPath);
     if(this->gConf)
@@ -153,7 +168,7 @@ int MDSElemInit(MDSElem* this, MDSServer* server, MdsElemClass* class, const cha
                 int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem),
                 int(*removeAsVendor)(MDSElem* this, MDSElem* guestElem))
 {
-    if (!this || !server || !class || !name || !process || !addedAsGuest || !addedAsVendor) {
+    if (!this || !server || !class || !name ) {
         MDS_ERR_OUT(ERR_OUT, "\n");
     }
     this->ref = 0;
@@ -162,12 +177,21 @@ int MDSElemInit(MDSElem* this, MDSServer* server, MdsElemClass* class, const cha
     CFStringInit(&this->name, name);
     this->vendors = NULL;
     this->guests = NULL;
-    this->process = process;
-    this->addAsGuest = addedAsGuest;
-    this->addAsVendor = addedAsVendor;
-    this->removeAsGuest = removeAsGuest;
-    this->removeAsVendor = removeAsVendor;
-    //this->server->elements = CFGListAppend(this->server->elements, this);
+    if (process) {
+        this->class->process = process;
+    }
+    if (addedAsGuest) {
+        this->class->addedAsGuest = addedAsGuest;
+    }
+    if (addedAsVendor) {
+        this->class->addedAsVendor = addedAsVendor;
+    }
+    if (removeAsGuest) {
+        this->class->removeAsGuest = removeAsGuest;
+    }
+    if (removeAsVendor) {
+        this->class->removeAsVendor = removeAsVendor;
+    }
     return 0;
 ERR_OUT:
     return -1;
@@ -222,24 +246,41 @@ BOOL MDSElemHasVendor(MDSElem* elem, MDSElem* vendor)
     return FALSE;
 }
 
-static void MDSElemDelGuest(MDSElem* elem, MDSElem* guest)
+static int MDSElemDelGuest(MDSElem* elem, MDSElem* guest)
 {
+    int ret = 0;
     CFGListForeach(elem->guests, node) {
         if ((MDSElem*)node->data == guest) {
+            if (elem->class->removeAsVendor && elem->class->removeAsVendor(elem, guest)) {
+                MDS_ERR("remove element: %s as vendor failed\n", CFStringGetStr(&elem->name));
+                ret = -1;
+            }
+            MDSElemUnrefAndSetNull((MDSElem**)&(node->data));
             elem->guests= CFGListDel(elem->guests, node);
-            break;
+            return ret;
         }
     }
+    ret = -1;
+    return ret;
 }
 
-static void MDSElemDelVendor(MDSElem* elem, MDSElem* vendor)
+static int MDSElemDelVendor(MDSElem* elem, MDSElem* vendor)
 {
+    int ret = 0;
+    
     CFGListForeach(elem->vendors, node) {
         if ((MDSElem*)node->data == vendor) {
+            if (elem->class->removeAsGuest && elem->class->removeAsGuest(elem, vendor)) {
+                MDS_ERR("remove element: %s as guest error\n", CFStringGetStr(&elem->name));
+                ret = -1;
+            }
+            MDSElemUnrefAndSetNull((MDSElem**)&(node->data));
             elem->vendors= CFGListDel(elem->vendors, node);
-            break;
+            return ret;
         }
     }
+    ret = -1;
+    return ret;
 }
 
 inline const char* MDSElemGetClassName(MDSElem* elem)
@@ -258,7 +299,9 @@ int MDSElemCastMsg(MDSElem* elem, const char* type, void* data)
     CFGListForeach(elem->guests, node) {
         guestElem = (MDSElem*)node->data;
         assert(guestElem);
-        ret |= guestElem->process(guestElem, elem,&msg);
+        if (guestElem->class->process) {
+            ret |= guestElem->class->process(guestElem, elem, &msg);
+        }
     }
     return ret;
 }
@@ -274,7 +317,9 @@ int MDSElemSendMsg(MDSElem* elem, const char* guestName, const char* type, void*
     CFGListForeach(elem->guests, node) {
         guestElem = (MDSElem*)node->data;
         if (!strcmp(guestName, CFStringGetStr(&guestElem->name))) {
-            ret |= guestElem->process(guestElem, elem, &msg);
+            if (guestElem->class->process) {
+                ret |= guestElem->class->process(guestElem, elem, &msg);
+            }
             break;
         }
     }
@@ -311,6 +356,18 @@ int MDSElemDisconnectAllGuests(MDSElem* elem)
     return ret;
 }
 
+int MDSElemDisconnectAll(MDSElem* elem)
+{
+    int ret = 0;
+    MDSElem* ref;
+    
+    ref = MDSElemRef(elem);
+    ret |= MDSElemDisconnectAllGuests(elem);
+    ret |= MDSElemDisconnectAllVendors(elem);
+    MDSElemUnref(ref);
+    return ret;
+}
+
 int MDSElemExit(MDSElem* elem)
 {
     CFStringExit(&elem->name);
@@ -319,17 +376,21 @@ int MDSElemExit(MDSElem* elem)
     return 0;
 }
 
-static int MDSElemRelease(MDSElem* elem)
+static void MDSElemRelease(MDSElem* elem)
 {
     MDS_DBG("===>MDSElemRelease\n");
-    elem->ref--;
+    /*
     CFGListForeach(elem->server->elements, node) {
         if ((MDSElem*)(node->data) == elem) {
             elem->server->elements = CFGListDel(elem->server->elements, node);
             break;
         }
     }
-    return elem->class->release(elem);
+    */
+    if (MDSElemDisconnectAll(elem)) {
+        MDS_ERR("MDSElemDisconnetAll() failed\n");
+    }
+    elem->class->release(elem);
 }
 
 MDSElem* MDSElemRef(MDSElem* elem)
@@ -338,31 +399,67 @@ MDSElem* MDSElemRef(MDSElem* elem)
     return elem;
 }
 
-void MDSElemUnref(MDSElem* elem)
+int MDSElemGetRefCount(MDSElem* elem)
+{
+    return elem->ref;
+}
+
+BOOL MDSElemUnref(MDSElem* elem)
 {
     MDS_DBG("===>MDSElemUnref\n");
     MDS_DBG("%s.ref=%d\n", CFStringGetStr(&elem->name), elem->ref);
-    elem->ref--;
-    if (elem->ref<=1) {
-        MDSElemRelease(elem);
+    if (elem) {
+        elem->ref--;
+        if (elem->ref == 0) {
+            MDSElemRelease(elem);
+            return TRUE;
+        } else if (elem->ref < 0) {
+            MDS_ERR("Elem: %s ref invalid\n", CFStringGetStr(&elem->name));
+            MDSElemRelease(elem);
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void MDSElemUnrefAndSetNull(MDSElem** elem)
+{
+    if (MDSElemUnref(*elem)) {
+        *elem = NULL;    
     }
 }
 
 int MDSServerConnectElems(MDSElem* vendor, MDSElem* guestElem)
 {
-    if (vendor->addAsVendor(vendor, guestElem)) {
-        MDS_ERR_OUT(ERR_OUT, "%s add as vendor failed\n", CFStringGetStr(&vendor->name))
-    }
-    if (guestElem->addAsGuest(guestElem, vendor)) {
-        MDS_ERR_OUT(ERR_RM_AS_VENDOR, "%s add as guest failed\n", CFStringGetStr(&guestElem->name))
-    }
     vendor->guests = CFGListAppend(vendor->guests, MDSElemRef(guestElem));
+    if (vendor->class->addedAsVendor && vendor->class->addedAsVendor(vendor, guestElem)) {
+        MDS_ERR_OUT(ERR_DEL_GUEST, "%s add as vendor failed\n", CFStringGetStr(&vendor->name))
+    }
+    
     guestElem->vendors = CFGListAppend(guestElem->vendors, MDSElemRef(vendor));
+    if (guestElem->class->addedAsGuest && guestElem->class->addedAsGuest(guestElem, vendor)) {
+        MDS_ERR_OUT(ERR_DEL_VENDOR, "%s add as guest failed\n", CFStringGetStr(&guestElem->name))
+    }
     return 0;
+    
 ERR_RM_AS_GUEST:
-    guestElem->removeAsGuest(guestElem, vendor);
+    MDSElemDelVendor(guestElem, vendor);
+ERR_DEL_VENDOR:
+    {CFGListForeach(guestElem->vendors, node) {
+        if ((MDSElem*)node->data == vendor) {
+            MDSElemUnrefAndSetNull((MDSElem**)&(node->data));
+            guestElem->vendors= CFGListDel(guestElem->vendors, node);
+        }
+    }}
 ERR_RM_AS_VENDOR:
-    vendor->removeAsVendor(vendor, guestElem);
+    MDSElemDelGuest(vendor, guestElem);
+ERR_DEL_GUEST:
+    {CFGListForeach(vendor->guests, node) {
+        if ((MDSElem*)node->data == guestElem) {
+            MDSElemUnrefAndSetNull((MDSElem**)&(node->data));
+            vendor->guests= CFGListDel(vendor->guests, node);
+        }
+    }}
 ERR_OUT:
     return -1;
 }
@@ -371,30 +468,9 @@ int MDSServerDisConnectElems(MDSElem* elem, MDSElem* guestElem)
 {
     int ret = 0;
 
-    CFGListForeach(elem->guests, node){
-        if ((MDSElem*)node->data == guestElem) {
-            
-            if (guestElem->removeAsGuest(guestElem, elem)) {
-                ret |= -1;
-                MDS_ERR("remove element: %s as guest failed\n", CFStringGetStr(&guestElem->name));
-            }
-            if (elem->removeAsVendor(elem, guestElem)) {
-                ret |= -1;
-                MDS_ERR("remove element: %s as vendor failed\n", CFStringGetStr(&elem->name));
-            }
-            
-            MDS_DBG("\n");
-            MDSElemDelGuest(elem, guestElem);
-            MDS_DBG("\n");
-            MDSElemUnref(guestElem);
-            MDS_DBG("\n");
-            MDSElemDelVendor(guestElem, elem);
-            MDS_DBG("\n");
-            MDSElemUnref(elem);
-            MDS_DBG("\n");
-            break;
-        }
-    }
+    ret |= MDSElemDelGuest(elem, guestElem);
+    ret |= MDSElemDelVendor(guestElem, elem);
+    
     return ret;
 }
 
@@ -448,7 +524,6 @@ MDSElem* MDSServerRequestElem(MDSServer* svr, const char* elemClassName, CFJson*
         if (!strcmp(cls->name, elemClassName)) {
             MDS_DBG("Found elemClass: %s\n", elemClassName);
             ret = cls->request(svr, jConf);
-            assert(ret);
             if (ret) {
                 svr->elements = CFGListAppend(svr->elements, MDSElemRef(ret));
                 MDS_DBG("New element: %s\n", CFStringGetStr(&ret->name));
@@ -457,6 +532,18 @@ MDSElem* MDSServerRequestElem(MDSServer* svr, const char* elemClassName, CFJson*
         }
     }
     return NULL;
+}
+
+int MDSServerReleaseElem(MDSServer* svr, MDSElem* elem)
+{
+    CFGListForeach(svr->elements, elemNode) {
+        if (elem == (MDSElem*)elemNode->data) {
+            svr->elements = CFGListDel(svr->elements, elemNode);
+            MDSElemUnref(elem);
+            return TRUE;
+        }
+    }
+    return FALSE;
 }
 
 MDSElem* MDSServerFindElemByName(MDSServer* svr, const char* elemName)
@@ -507,6 +594,21 @@ int MDSServerDisConnectElemsByName(MDSServer* svr, const char* vendorElemName, c
     return -1;
 }
 
+int MDSServerDisConnectAllElems(MDSServer* svr)
+{
+    int ret = 0;
+    MDSElem *elem;
+    CFGListForeach(svr->elements, elemNode) {
+        if (elemNode) {
+            elem = elemNode->data;
+            ret |= MDSElemDisconnectAll(elem);
+        }
+    }
+
+    return ret;
+}
+
+/* force release all elements */
 int MDSServerReleaseAllElems(MDSServer* svr)
 {
     int ret = 0;
@@ -517,7 +619,7 @@ int MDSServerReleaseAllElems(MDSServer* svr)
         CFGList *node;
         MDS_DBG("\n");
         if ((node=CFGListGetTail(svr->elements)) && (elem=node->data)) {
-                MDS_MSG("Releasing element: %s\n", CFStringGetStr(&elem->name));
+            MDS_MSG("Releasing element: %s\n", CFStringGetStr(&elem->name));
             ret |= elem->class->release(elem);
 /*                      MDS_DBG("elems=%x, next=%x, CNext=%x, node=%x\n", */
 /*                                      (unsigned int)&svr->elements->list, */
@@ -601,7 +703,7 @@ int main(int argc, char** argv)
         }
     }
     if (!cfgFile) {
-	MDS_ERR_OUT(ERR_OUT, "Please specify config file for medusa.\n")
+    MDS_ERR_OUT(ERR_OUT, "Please specify config file for medusa.\n")
     }
     if (CFStringInit(&tmpStr, "")) {
         MDS_ERR_OUT(ERR_OUT, "\n");
@@ -668,13 +770,13 @@ int main(int argc, char** argv)
         }
     }
     MDSServerRun(&server);
-    MDS_DBG("\n");
+    MDSServerDisConnectAllElems(&server);
     MDSServerReleaseAllElems(&server);
-    MDS_DBG("\n");
     MDSServerExit(&server);
     CFStringExit(&pidFileStr);
     CFStringExit(&tmpStr2);
     CFStringExit(&tmpStr);
+    MDS_DBG("main()===>\n");
     return 0;
 
 ERR_EXIT_PID_STR:

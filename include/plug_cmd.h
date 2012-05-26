@@ -23,6 +23,8 @@
 #include <cf_buffer.h>
 typedef struct mds_cmd_msg {
     char* cmd;
+    int cmdLen;
+    CFBuffer* reqBuf;
     CFBuffer* respBuf;
 }MdsCmdMsg;
 

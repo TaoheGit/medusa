@@ -94,6 +94,7 @@ typedef enum {
     MDS_PIX_FMT_NV61,
     /* Compressed Image Formats */
     MDS_PIX_FMT_JPEG,
+    MDS_PIX_FMT_MPEG2,
     MDS_PIX_FMT_MPEG4,
     MDS_PIX_FMT_H264,
     MDS_PIX_FMT_COUNT
@@ -112,6 +113,7 @@ struct mds_img_buf{
     int height;
     void* bufPtr;
     int bufSize;    /* Maybe bigger than actual size needed */
+    int imgBufSize;
 };
 int MdsImgBufInit(MdsImgBuf* buf, MdsPixFmt pixFmt, int width, int height,
         void* bufPtr, int bufSize);
@@ -122,7 +124,9 @@ MdsImgBuf* MdsImgBufNew(MdsPixFmt pixFmt, int width, int height,
 void MdsImgBufExit(MdsImgBuf* buf);
 void MdsImgBufFree(MdsImgBuf* buf);
 int MdsImgBufConvFmt(MdsImgBuf* dst, MdsImgBuf* src);
-#define MdsImgBufGetImgBufSize(__buf) (MdsImgGetImgBufSize((__buf)->pixFmt, (__buf)->width, (__buf)->height))
+void MdsImgBufSetCompressionImgBufSize(MdsImgBuf* buf, int size);
+#define MdsImgBufGetImgBufSize(__buf) ((__buf)->imgBufSize)
 #define MdsImgBufGetBufSize(__buf) ((__buf)->bufSize)
+#define MdsImgBufGetPixFmt(__buf)   ((__buf)->pixFmt)
 #endif
 

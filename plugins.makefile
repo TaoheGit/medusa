@@ -18,12 +18,14 @@ ifeq ($(DEBUG),y)
 CFLAGS += -g
 LDFLAGS += -g
 else
-CFLAGS += -s -O3
-LDFLAGS += -s -O3
+CFLAGS += -s -O2
+LDFLAGS += -s -O2
 endif
 
 ###################################################
-TARGET = plug_cmd.so plug_v4l2.so plug_file_sink.so plug_raw_img_soft_conv.so plug_xmpp.so
+TARGET = plug_cmd.so plug_v4l2.so plug_rtp_sink.so plug_file_sink.so 
+TARGET += plug_raw_img_soft_conv.so plug_xmpp.so plug_gpio.so
+TARGET += plug_input.so
 OBJS = 
 CFLAGS += $(CFLAGS_LIBCHUNFENG) -Wno-unused-label
 
@@ -33,7 +35,7 @@ CFLAGS += -D_DAVINCI_VPFE_
 endif
 
 ifeq ($(SUPPORT_DV_DMAI), yes)
-TARGET += plug_dv_resizer.so plug_dv_previewer.so
+TARGET += plug_dv_resizer.so plug_dv_previewer.so plug_dv_encoder.so
 ifeq ($(CONFIG_DM365_IPIPE), yes)
 DV_DMAI_CFLAGS += -DCONFIG_DM365_IPIPE
 endif
@@ -42,6 +44,7 @@ endif
 ifeq ($(ENABLE_XMPP), yes)
 LDFLAGS += $(LDFLAGS_IKSEMEL) $(LDFLAGS_GNUTLS) $(LDFLAGS_GMP)
 endif
+CXXFLAGS = $(CFLAGS)
 ###################################################
 plug_dv_resizer.so:plug_dv_resizer.o dv_plug_cfg.o
 	$(CC) -shared -symbolic -lpthread $(LDFLAGS_LIBCHUNFENG)  $(LDFLAGS) -o $@ $^ $(DV_DMAI_LDFLAGS)
@@ -56,6 +59,12 @@ plug_dv_previewer.so:plug_dv_previewer.o dv_plug_cfg.o
 	$(CC) -shared -symbolic -lpthread $(LDFLAGS_LIBCHUNFENG)  $(LDFLAGS) -o $@ $^ $(DV_DMAI_LDFLAGS)
 
 plug_dv_previewer.o:plug_dv_previewer.c
+	$(CC) -c $(CFLAGS) $(DV_DMAI_CFLAGS) -o $@ $^
+    
+plug_dv_encoder.so:plug_dv_encoder.o dv_plug_cfg.o
+	$(CC) -shared -symbolic -lpthread $(LDFLAGS_LIBCHUNFENG)  $(LDFLAGS) -o $@ $^ $(DV_DMAI_LDFLAGS)
+
+plug_dv_encoder.o:plug_dv_encoder.c
 	$(CC) -c $(CFLAGS) $(DV_DMAI_CFLAGS) -o $@ $^
 ###################################################
 all:$(TARGET)

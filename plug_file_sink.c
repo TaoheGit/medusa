@@ -34,11 +34,11 @@
 #include <cf_common.h>
 #include <cf_pipe.h>
 #include <cf_buffer.h>
+#include <cf_rtp.h>
 #include "medusa.h"
 #include "mds_log.h"
 #include "mds_media.h"
 
-#define MDS_V4L2_ELEM_CLASS_NAME        "V4L2_ELEM"
 #define MDS_FILE_SINK_ELEM_CLASS_NAME   "FILE_SINK_ELEM"
 #define MDS_RAW_IMG_CONV_ELEM_CLASS_NAME   "RAW_IMG_CONV_ELEM"
 #define MDS_MSG_TYPE_IMAGE  "Image"
@@ -80,21 +80,32 @@ static int __MdsFileSinkProcess(MDSElem* this, MDSElem* vendor, MdsMsg* msg)
     MdsFileSinkElem* fem = (MdsFileSinkElem*)this;
     CFBuffer* buf;
     int imgSize;
+    uint8_t *dataPtr;
+    
+    
+    char dbgBuf[2048];
+    int i;
+    for (i=0; i<sizeof(dbgBuf); i++) {
+        dbgBuf[i] = i;
+    }
     
     if (!strcmp(msg->type, MDS_MSG_TYPE_IMAGE)) {  /* Image */
         imgBuf = (MdsImgBuf*)msg->data; 
         imgSize = MdsImgBufGetImgBufSize(imgBuf);
+        
+        dataPtr = MdsImgBufGetPtr(imgBuf);
+        
         if ((buf = CFPipePop(&fem->emptyPipe))) {
             //MDS_DBG("buf=%llx, bufSize=%d, imgBuf->bufPtr=%x, imgSize=%d\n",
             //              (unsigned long long)buf, CFBufferGetSize(buf),
             //              (unsigned long long)MdsImgBufGetPtr(imgBuf),  imgSize);
             CFBufferCp(buf, MdsImgBufGetPtr(imgBuf), imgSize);
-            if (!CFPipePush(&fem->fullPipe, buf)) {
-                    return CFFdeventsAddIfNotAdded(this->server->fdevents, &fem->fdEvent);
+            if (CFPipePush(&fem->fullPipe, buf)) {
+                return -1;
             }
-            return -1;
+            return CFFdeventsAddIfNotAdded(this->server->fdevents, &fem->fdEvent);
         } else {
-            MDS_MSG("No available empty buf for output\n");
+            MDS_DBG("No empty buf for output, drop image data\n");
             return 0;
         }
     } else {
@@ -136,11 +147,9 @@ static int __MdsFileSinkRemoveAsGuest(MDSElem* this, MDSElem* vendor)
         MDS_ERR("MdsFileSinkElem can only be chained once!!\n")
         return -1;
     }
-    if (!strcmp(vendor->class->name, MDS_V4L2_ELEM_CLASS_NAME)) {
-        while ((buf=CFPipePop(&fem->fullPipe))) {
-            CFPipePush(&fem->emptyPipe, buf);
-        }
-    }
+	while ((buf=CFPipePop(&fem->fullPipe))) {
+		CFPipePush(&fem->emptyPipe, buf);
+	}
     CFFdeventsDel(fem->server->fdevents, &fem->fdEvent);
     fem->writed = 0;
     fem->chained = FALSE;
@@ -167,7 +176,7 @@ int _MdsFileSinkFdWriteable(CFFdevents* events, CFFdevent* event, int fd, void* 
 
         if (CFAsyncWrite(fem->fd, bufPtr, bufSize, &fem->writed, &writed) < 0) {  /* regular file not support non block IO!! */
             MDS_DBG("Write failed: %s\n", strerror(errno));
-            MDSServerReleaseElem(fem->server, (MDSElem*)fem);
+            MDSElemDisconnectAll((MDSElem*)fem);
             return -1;
         }
         
@@ -186,7 +195,7 @@ int _MdsFileSinkFdWriteable(CFFdevents* events, CFFdevent* event, int fd, void* 
         //MDS_DBG("\n");
     }
     if (!CFPipeGetData(&fem->fullPipe)) {   /* no data available, remove fdEvent */
-        MDS_DBG("\n");
+        //MDS_DBG("\n");
         CFFdeventsDel(fem->server->fdevents, &fem->fdEvent);
     }
     //MDS_DBG("\n");
@@ -195,6 +204,7 @@ int _MdsFileSinkFdWriteable(CFFdevents* events, CFFdevent* event, int fd, void* 
 
 /*
 {
+    "class": "FILE_SINK_ELEM",
     "name": "fileSink1",
     "file": "./output.raw"
 }
@@ -212,11 +222,13 @@ static MDSElem* _FileSinkElemRequested(MDSServer* svr, CFJson* jConf)
         MDS_ERR_OUT(ERR_OUT, "malloc for MdsFileSinkElem failed\n");
     }
     if (!(tmpCStr=CFJsonObjectGetString(jConf, "file"))
-                    || (fem->fd = open(tmpCStr, O_TRUNC|O_CREAT|O_WRONLY|O_NONBLOCK, 0644))<0) {
+                    || (fem->fd = open(tmpCStr, O_TRUNC|O_CREAT|O_RDWR|O_NONBLOCK, 0644))<0) {
         MDS_ERR_OUT(ERR_FREE_FEM, "Open %s failed: %s\n", tmpCStr, strerror(errno));
     }
     MDS_DBG("fd=%d\n", fem->fd);
-    if (CFFdeventInit(&fem->fdEvent, fem->fd, NULL, NULL, _MdsFileSinkFdWriteable, fem)) {
+    if (CFFdeventInit(&fem->fdEvent, fem->fd, NULL, NULL, 
+			    _MdsFileSinkFdWriteable, fem,
+			    NULL, NULL)) {
         MDS_ERR_OUT(ERR_CLOSE_FD, "CFFdeventInit failed\n");
     }
     for (iFBuf=0; iFBuf<CF_ARRAY_SIZE(fem->bufs); iFBuf++) {

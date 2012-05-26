@@ -31,20 +31,46 @@ typedef struct mds_server MDSServer;
 typedef struct mds_plugin MDSPlugin;
 typedef struct mds_elem MDSElem;
 
+#define MDS_MSG_TYPE_LEN    10
+typedef struct mds_msg MdsMsg;
+struct mds_msg {
+    char type[MDS_MSG_TYPE_LEN+1];
+    void* data;
+};
+
+#define MDS_PLUG_INIT_SYMBOLY   Plug
+#define MDS_PLUG_INIT_SYMBOLY_STR   "Plug"
 #define MDS_PLUGIN_MEMBERS    \
-    void* dlHandl;  \
     const char* name;   \
+    const char* descr;	\
+    short version[3];    \
+    const char* author;    \
+    void* dlHandl;  \
     int(*init)(MDSPlugin* this, MDSServer* server); \
     int(*exit)(MDSPlugin* this, MDSServer* server); \
     CFListHead list
 struct mds_plugin{
     MDS_PLUGIN_MEMBERS;
 };
+#define MDS_PLUGIN(__author, __plugName, __plugDescr, __initPlugFunc, __ExitPlugFunc, __maxVer, __minVer, __fixVer)    \
+MDSPlugin MDS_PLUG_INIT_SYMBOLY = {    \
+    .version = {__maxVer, __minVer, __fixVer},    \
+    .author = __author,    \
+    .name = __plugName,    \
+    .descr = __plugDescr,    \
+    .init = __initPlugFunc,    \
+    .exit = __ExitPlugFunc    \
+};
 
 typedef struct mds_elem_class {
-        const char* name;
-        MDSElem*(*request)(MDSServer* svr, CFJson* jConfStr);
-        int(*release)(MDSElem* elem);
+    const char* name;
+    MDSElem*(*request)(MDSServer* svr, CFJson* jConfStr);
+    int(*release)(MDSElem* elem);
+    int(*process)(MDSElem* this, MDSElem* vendor, MdsMsg* msg); 
+    int(*addedAsGuest)(MDSElem* this, MDSElem* vendorElem);
+    int(*addedAsVendor)(MDSElem* this, MDSElem* guestElem);
+    int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem);
+    int(*removeAsVendor)(MDSElem* this, MDSElem* guestElem);
 }MdsElemClass;
 
 struct mds_server{
@@ -63,9 +89,9 @@ int MDSServerExit(struct mds_server* this);
 int MDSServerLoadPlugins(MDSServer* svr);
 int MDSServerRmPlugins(MDSServer* svr);
 int MDSServerRun(MDSServer* svr);
-MDSElem* MDSServerReuestElem(struct mds_server* this, const char* name, const char* jConfStr);
-int MDSServerReleaseElem(struct mds_server* svr, MDSElem* elem);
-//int MDSServerChainElems(struct mds_server* svr, MDSElem* elem, ...);
+MDSElem* MDSServerReqestElem(struct mds_server* this, const char* name, const char* jConfStr);
+BOOL MDSServerReleaseElem(struct mds_server* svr, MDSElem* elem);
+int MDSServerChainElems(struct mds_server* svr, MDSElem* elem, ...);
 int MDSServerConnectElemsByName(MDSServer* svr, const char* vendorElemName, const char* guestElemName);
 int MDSServerDisConnectElemsByName(MDSServer* svr, const char* vendorElemName, const char* guestElemName);
 int MDSServerRegistElemClass(MDSServer* svr, MdsElemClass* cls);
@@ -73,13 +99,7 @@ int MDSServerAbolishElemClass(MDSServer* svr, MdsElemClass* cls);
 MDSElem* MDSServerRequestElem(MDSServer* svr, const char* elemClassName, CFJson* jConf);
 MDSElem* MDSServerFindElemByName(MDSServer* svr, const char* elemName);
 int MDSServerDisConnectElems(MDSElem* elem, MDSElem* guestElem);
-
-#define MDS_MSG_TYPE_LEN    10
-typedef struct mds_msg MdsMsg;
-struct mds_msg {
-    char type[MDS_MSG_TYPE_LEN+1];
-    void* data;
-};
+#define MDSServerGetFdevents(__svr) (__svr->fdevents)
 
 #define MDS_ELEM_MEMBERS  \
     int ref;    \
@@ -88,11 +108,6 @@ struct mds_msg {
     CFString name;    \
     CFGList* guests;    \
     CFGList* vendors;   \
-    int(*process)(MDSElem* this, MDSElem* vendor, MdsMsg* msg);  \
-    int(*addAsGuest)(MDSElem* this, MDSElem* vendorElem);       \
-    int(*addAsVendor)(MDSElem* this, MDSElem* guestElem); \
-    int(*removeAsGuest)(MDSElem* this, MDSElem* vendorElem);    \
-    int(*removeAsVendor)(MDSElem* this, MDSElem* guestElem); \
     CFListHead list
 struct mds_elem {
     MDS_ELEM_MEMBERS;
@@ -112,8 +127,13 @@ inline const char* MDSElemGetClassName(MDSElem* elem);
 int MDSElemCastMsg(MDSElem* elem, const char* type, void* data);
 int MDSElemSendMsg(MDSElem* elem, const char* guestName, const char* type, void* data);
 int MDSElemExit(MDSElem* elem);
-
+int MDSElemDisconnectAllGuests(MDSElem* elem);
+int MDSElemDisconnectAllVendors(MDSElem* elem);
+int MDSElemDisconnectAll(MDSElem* elem);
 MDSElem* MDSElemRef(MDSElem* elem);
-void MDSElemUnref(MDSElem* elem);
+int MDSElemGetRefCount(MDSElem* elem);
+BOOL MDSElemUnref(MDSElem* elem);
+void MDSElemUnrefAndSetNull(MDSElem** elem);
+
 #endif
 

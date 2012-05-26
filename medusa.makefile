@@ -46,7 +46,6 @@ $(TARGET).$(VER):$(OBJS)
 install:
 	mkdir -p $(prefix)/bin
 	cp -af ${TARGET} ${TARGET}.${VER} $(prefix)/bin
-	install -D examples/medusa.conf $(prefix)/etc/medusa.conf
 	
 uninstall:
 	rm -rf $(prefix)/bin/${TARGET} $(prefix)/bin/${TARGET}.$(VER)
