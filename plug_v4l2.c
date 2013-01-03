@@ -38,6 +38,7 @@
 #include <linux/videodev2.h>
 #include <cf_string.h>
 #include <cf_common.h>
+#include <cf_timer.h>
 #ifdef _DAVINCI_VPFE_
 #include <media/davinci/videohd.h>
 #endif
@@ -47,6 +48,7 @@
 #include "mds_media.h"
 #include "mds_tools.h"
 #include "plug_cmd.h"
+#include "mds_msg_v4l2_ctl.h"
 
 #ifndef MAX_V4L2_ELEMS
 #define MAX_V4L2_ELEMS  6
@@ -70,6 +72,7 @@ typedef struct v4l2_elem{
     int enStats:1;
     int countForDropFrame;
     int dropFrame;
+    CFTimer frameCapTimer;
 }MdsV4l2Elem;
 
 #define MDS_V4L2_PLUGIN_NAME    "PLUG_V4L2"
@@ -299,13 +302,17 @@ static int __MDSV4l2ElemAddAsVendor(MDSElem* this, MDSElem* guestElem)
         case V4L2_BUF_TYPE_VIDEO_CAPTURE:
             switch (vElem->req.memory) {
                 case V4L2_MEMORY_MMAP:
-                	MDS_DBG("gustCount=%d\n"MDSElemGetGuestCount(this));
+                	MDS_DBG("gustCount=%d\n", MDSElemGetGuestCount(this));
                     if (MDSElemGetGuestCount(this) == 1) {       /* start streaming only first time being added as vendor */
                         t = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                         if ((ret=ioctl(vElem->fd, VIDIOC_STREAMON, &t))) {
                             MDS_ERR("VIDIOC_STREAMON error:%s\n", strerror(errno));
                         }
+#ifndef _DM36X_V4L2_CPU_LOAD_BUG_
                         CFFdeventsAdd(vElem->server->fdevents, &vElem->fdEvent);
+#else
+                        CFTimerModTime(&vElem->frameCapTimer, 0, 50000000, 0, 50000000);
+#endif
                     }
                     break;
                 case V4L2_MEMORY_USERPTR:
@@ -366,10 +373,52 @@ static int __MDSV4l2ElemProcess(MDSElem* this, MDSElem* vendor, MdsMsg* msg)
 						vElem->countForDropFrame = 0;
 					}
 				    CFBufferCp(respBuf, CF_CONST_STR_LEN("{\"ret\":\"ok\"}\n"));
+				} else if (!CFJsonObjectGetInt(jMsg, "stream_on", &tmpInt)) {
+					
+					if (tmpInt) {
+						#ifdef _TEK_OV772X_
+						system("/etc/rc.d/ov772x.sh run");
+						#else
+						int t = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+						if ((ret = ioctl(vElem->fd, VIDIOC_STREAMON, &t))) {
+                            MDS_ERR("VIDIOC_STREAMON\n");
+						}
+						#endif
+					} else {
+						#ifdef _TEK_OV772X_
+						system("/etc/rc.d/ov772x.sh sleep");
+						#else
+						int t = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+						if ((ret = ioctl(vElem->fd, VIDIOC_STREAMOFF, &t))) {
+                            MDS_ERR("VIDIOC_STREAMOFF\n");
+						}
+						#endif
+					}
+					CFBufferCp(respBuf, CF_CONST_STR_LEN("{\"ret\":\"ok\"}\n"));
 				} else {
-				    CFBufferCp(respBuf, CF_CONST_STR_LEN("{\"ret\":\"fail\"}\n"));
+				    CFBufferCp(respBuf, CF_CONST_STR_LEN("{\"ret\":\"fail\", \"error\":\"unknown command\"}\n"));
 				}
 				CFJsonPut(jMsg);
+			} else if (!strcmp(msg->type, MDS_MSG_TYPE_V4L2_CTL)) {
+				if ((int)msg->data == MDS_MSG_V4L2_CTL_STREAMON) {
+					#ifdef _TEK_OV772X_
+					system("/etc/rc.d/ov772x.sh run");
+					#else
+					int t = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+					if ((ret = ioctl(vElem->fd, VIDIOC_STREAMON, &t))) {
+						MDS_ERR("VIDIOC_STREAMON\n");
+                    }
+                    #endif
+				} else if ((int)msg->data == MDS_MSG_V4L2_CTL_STREAMOFF) {
+					#ifdef _TEK_OV772X_
+					system("/etc/rc.d/ov772x.sh sleep");
+				    #else
+				    int t = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+					if ((ret = ioctl(vElem->fd, VIDIOC_STREAMOFF, &t))) {
+						MDS_ERR("VIDIOC_STREAMOFF\n");
+                    }
+                    #endif
+				}
 			}
             break;
         case V4L2_BUF_TYPE_VIDEO_OUTPUT:
@@ -417,7 +466,7 @@ static int __MDSV4l2ElemProcess(MDSElem* this, MDSElem* vendor, MdsMsg* msg)
             }
             break;
     default:
-                MDS_ERR("Not implemented yet\n");
+        MDS_ERR("Not implemented yet\n");
         ret = -1;
         break;
     }
@@ -474,7 +523,11 @@ static int __MDSV4l2RemoveAsVendor(MDSElem* this, MDSElem* guestElem)
             switch (vElem->req.memory) {
                 case V4L2_MEMORY_MMAP:
                     if (!vElem->guests || CFGListGetNext(vElem->guests) == vElem->guests) { /* only one guest and will be removed */
-                            CFFdeventsDel(vElem->server->fdevents, &vElem->fdEvent);
+#ifndef _DM36X_V4L2_CPU_LOAD_BUG_
+                        CFFdeventsDel(vElem->server->fdevents, &vElem->fdEvent);
+#else
+                        CFTimerCancel(&vElem->frameCapTimer);
+#endif
                         if ((ret=ioctl(vElem->fd, VIDIOC_STREAMOFF, &t))) {
                             MDS_ERR("VIDIOC_STREAMOFF\n");
                         }
@@ -504,14 +557,12 @@ static int __MDSV4l2RemoveAsVendor(MDSElem* this, MDSElem* guestElem)
     return ret;
 }
 
-int __MdsV4l2CapMmapReadable(CFFdevents* events, CFFdevent* event, int fd, void* data)
+int MdsV4l2ElemCapOneFrame(MdsV4l2Elem* vElem)
 {
-    MdsV4l2Elem* vElem;
     struct v4l2_buffer buf;
     int ret;
     struct timeval tv;
     
-    vElem = (MdsV4l2Elem*)data;
     assert(vElem);
     memset(&buf, 0, sizeof(buf));
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -523,9 +574,10 @@ int __MdsV4l2CapMmapReadable(CFFdevents* events, CFFdevent* event, int fd, void*
      * it returns instantaneously with success or error depending on
      * captured buffer is available or not.
      */
-    //MDS_DBG("DQBUF\n");
+    MDS_DBG("DQBUF\n");
     if ((ret = ioctl(vElem->fd, VIDIOC_DQBUF, &buf))) {
-        MDS_ERR_OUT(ERR_OUT, "VIDIOC_DQBUF\n");
+        //MDS_ERR_OUT(ERR_OUT, "VIDIOC_DQBUF failed: %s\n", strerror(errno));
+        goto ERR_OUT;
     }
     vElem->enStats = 0;
 
@@ -547,6 +599,7 @@ int __MdsV4l2CapMmapReadable(CFFdevents* events, CFFdevent* event, int fd, void*
             vElem->savedTime = tv;
         }
     }
+    
     MDS_DBG("dropFrame=%d,countForDropFrame=%d\n", vElem->dropFrame, vElem->countForDropFrame);
 	if (vElem->dropFrame > 0) {
 		vElem->countForDropFrame++;
@@ -559,12 +612,22 @@ int __MdsV4l2CapMmapReadable(CFFdevents* events, CFFdevent* event, int fd, void*
     }
     
     if ((ret=ioctl(vElem->fd, VIDIOC_QBUF, &buf))) {
-        MDS_ERR_OUT(ERR_OUT, "VIDIOC_QBUF\n");
+        //MDS_ERR_OUT(ERR_OUT, "VIDIOC_QBUF failed: %s\n", strerror(errno));
+        goto ERR_OUT;
     }
 
     return ret;
 ERR_OUT:
     return ret;
+}
+
+int __MdsV4l2CapMmapReadable(CFFdevents* events, CFFdevent* event, int fd, void* data)
+{
+    MdsV4l2Elem *vElem;
+    
+    MDS_DBG("==>__MdsV4l2CapMmapReadable()\n");
+    vElem = (MdsV4l2Elem*)data;
+    return MdsV4l2ElemCapOneFrame(vElem);
 }
 
 int __MdsV4l2OutputMmapReadable(CFFdevents* events, CFFdevent* event, int fd, void* data)
@@ -590,15 +653,22 @@ int __MdsV4l2ElemInitMemMap(MdsV4l2Elem* vElem)
     }
     /* 1) request bufs; */
     if (ioctl(vElem->fd, VIDIOC_REQBUFS, &vElem->req)) {
-        MDS_ERR_OUT(ERR_FREE_MDS_IMG_BUF, "v4l2 request buffers failed\n")
+        MDS_ERR_OUT(ERR_OUT, "v4l2 request buffers failed\n")
     }
+    
+    vElem->imgBufs = calloc(sizeof(MdsImgBuf), vElem->req.count);
+    if (!vElem->imgBufs) {
+        MDS_ERR_OUT(ERR_OUT, "\n");
+    }
+    
     /* 2) query bufs information */
+    MDS_ERR("vElem->req.count=%d\n", vElem->req.count);
     for (iForReqBuf=0; iForReqBuf<vElem->req.count; iForReqBuf++) {
         buf.type = vElem->req.type;
         buf.memory = vElem->req.memory;
         buf.index = iForReqBuf;
         if (ioctl(vElem->fd, VIDIOC_QUERYBUF, &buf)) {
-                MDS_ERR_OUT(ERR_UNQUERY_BUFS, "\n");
+            MDS_ERR_OUT(ERR_UNQUERY_BUFS, "\n");
         }
         tmpPtr = mmap(NULL, buf.length,
                 PROT_READ | PROT_WRITE, MAP_SHARED,
@@ -632,8 +702,8 @@ int __MdsV4l2ElemInitMemMap(MdsV4l2Elem* vElem)
     return 0;
 ERR_UNQUERY_BUFS:
     for (iForReqBuf--; iForReqBuf>=0; iForReqBuf--) {
-            MdsImgBufExit(&vElem->imgBufs[iForReqBuf]);
-            munmap(vElem->imgBufs[iForReqBuf].bufPtr, vElem->imgBufs[iForReqBuf].bufSize);
+        MdsImgBufExit(&vElem->imgBufs[iForReqBuf]);
+        munmap(vElem->imgBufs[iForReqBuf].bufPtr, vElem->imgBufs[iForReqBuf].bufSize);
     }
 ERR_FREE_MDS_IMG_BUF:
     free(vElem->imgBufs);
@@ -648,8 +718,8 @@ int __MdsV4l2ElemExitMemMap(MdsV4l2Elem* vElem)
 
     ret = -1;
     for (iForReqBuf--; iForReqBuf>=0; iForReqBuf--) {
-	MdsImgBufExit(&vElem->imgBufs[iForReqBuf]);
-	ret |= munmap(vElem->imgBufs[iForReqBuf].bufPtr, vElem->imgBufs[iForReqBuf].bufSize);
+        MdsImgBufExit(&vElem->imgBufs[iForReqBuf]);
+        ret |= munmap(vElem->imgBufs[iForReqBuf].bufPtr, vElem->imgBufs[iForReqBuf].bufSize);
     }
     free(vElem->imgBufs);
     return ret;
@@ -667,6 +737,18 @@ int __MdsV4l2ElemExitUserPtr(MdsV4l2Elem* vElem)
     /* todo */
     return 0;
 }
+
+#ifdef _DM36X_V4L2_CPU_LOAD_BUG_
+static void cb_frameCapTmr(CFTimer* tmr, void* userData)
+{
+    MdsV4l2Elem *vElem;
+    
+    vElem = (MdsV4l2Elem*)userData;
+    if (MdsV4l2ElemCapOneFrame(vElem)) {
+        //MDS_ERR("MdsV4l2ElemCapOneFrame() failed\n");
+    }
+}
+#endif
 
 int __MdsV4l2ElemInit(MdsV4l2Elem* vElem)
 {
@@ -734,9 +816,15 @@ int __MdsV4l2ElemInit(MdsV4l2Elem* vElem)
         case V4L2_BUF_TYPE_VIDEO_CAPTURE:
             switch (vElem->req.memory) {
                 case V4L2_MEMORY_MMAP:
-                    CFFdeventInit(&vElem->fdEvent, vElem->fd,
+#ifndef _DM36X_V4L2_CPU_LOAD_BUG_
+                    CFFdeventInit(&vElem->fdEvent, vElem->fd, "V4l2CapRdFdEvt",
                             __MdsV4l2CapMmapReadable, vElem,
                             NULL, NULL, NULL, NULL);
+#else
+                    if (CFTimerInitStopped(&vElem->frameCapTimer, "V4l2Cap", cb_frameCapTmr, vElem, NULL)) {
+                        MDS_ERR_OUT(ERR_CLOSE_FD, "init v4l2 cap timer failed\n");
+                    }
+#endif
                     break;
                 case V4L2_MEMORY_USERPTR:
                     /* todo */
@@ -749,7 +837,7 @@ int __MdsV4l2ElemInit(MdsV4l2Elem* vElem)
         case V4L2_BUF_TYPE_VIDEO_OUTPUT:
             switch (vElem->req.memory) {
                 case V4L2_MEMORY_MMAP:
-                    CFFdeventInit(&vElem->fdEvent, vElem->fd,
+                    CFFdeventInit(&vElem->fdEvent, vElem->fd, "V4l2OutRdEvt",
                             __MdsV4l2OutputMmapReadable, vElem,
                             NULL, NULL, NULL, NULL);
                     break;
@@ -775,9 +863,13 @@ ERR_OUT:
 int __MdsV4l2ElemEixt(MdsV4l2Elem* vElem)
 {
     int ret = 0;
-
+    
+#ifndef _DM36X_V4L2_CPU_LOAD_BUG_
     CFFdeventsDel(vElem->server->fdevents, &vElem->fdEvent);
     CFFdeventExit(&vElem->fdEvent);
+#else
+    CFTimerExit(&vElem->frameCapTimer);
+#endif
     switch (vElem->req.memory) {
         case V4L2_MEMORY_MMAP:
                 ret |= __MdsV4l2ElemExitMemMap(vElem);
@@ -996,6 +1088,7 @@ static int _V4l2ElemReleased(MDSElem* elem)
     int i;
 
     assert(elem);
+    MDS_DBG_N();
     for (i=0; i<MAX_V4L2_ELEMS; i++) {
         if (v4l2.v4l2Elems[i] == (MdsV4l2Elem*)elem) {
             v4l2.v4l2Elems[i] = NULL;

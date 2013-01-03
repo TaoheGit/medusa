@@ -95,7 +95,7 @@ static int _inputReadable(CFFdevents* events, CFFdevent* event, int fd, void* da
 		sprintf(tmpCStr, "%lu", (unsigned long)ie.code);
 		setenv("INPUT_EVENT_CODE", tmpCStr, 1);
 		
-		sprintf(tmpCStr, "%lu", (unsigned long)ie.value);
+		sprintf(tmpCStr, "%d", ie.value);
 		setenv("INPUT_EVENT_VALUE", tmpCStr, 1);
 		system(giE->action);
 	}
@@ -122,7 +122,7 @@ static int MdsInputElemInit(MdsInputElem* giE, MDSServer* svr, const char* name,
 	if (giE->fd < 0) {
 		MDS_ERR_OUT(ERR_OUT, "\n");
 	}
-	if (CFFdeventInit(&giE->rdEvt, giE->fd, 
+	if (CFFdeventInit(&giE->rdEvt, giE->fd, "InputRdEvt",
 			_inputReadable, giE, 
 			NULL, NULL, 
 			NULL, NULL)) {

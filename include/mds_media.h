@@ -20,6 +20,7 @@
 #include <cf_common.h>
 #ifndef _MDS_MEDIA_H_
 #define _MDS_MEDIA_H_
+#define MDS_MSG_TYPE_IMAGE  "Image"
 typedef enum {
     MDS_VID_STD_INVALID = -1,
     MDS_VID_STD_CIF = 0, //{352, 288},

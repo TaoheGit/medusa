@@ -26,6 +26,7 @@
 #include <cf_sigfd.h>
 #include <cf_cmd.h>
 #include <cf_fdevent.h>
+//#define _DEBUG_
 #include "mds_log.h"
 
 typedef struct mds_ctl{
@@ -137,8 +138,9 @@ int MDSCtlInit(MDSCtl* this)
         MDS_ERR("\n");
         goto ERR_OUT;
     }
-    if(CFFdeventInit(&this->sigFdEvent, sigFd, MDSCtlSigFdReadable, (void*)this, 
-			    NULL, NULL, NULL, NULL)){
+    if(CFFdeventInit(&this->sigFdEvent, sigFd, "MdsCtlSigRdEvt",
+            MDSCtlSigFdReadable, (void*)this, 
+            NULL, NULL, NULL, NULL)){
         MDS_ERR("\n");
         goto ERR_SIGFD_CLOSE;
     }
@@ -150,13 +152,15 @@ int MDSCtlInit(MDSCtl* this)
     }
     fcntl(0, F_SETFL, fcntl(0, F_GETFL)|O_NONBLOCK);
     fcntl(1, F_SETFL, fcntl(1, F_GETFL)|O_NONBLOCK);
-    if(CFFdeventInit(&this->stdinEvt, 0, MDSCtlStdinReadable, this, 
-			    NULL, NULL, NULL, NULL)){
+    if(CFFdeventInit(&this->stdinEvt, 0, "MdsCtlstdinRdEvt",
+            MDSCtlStdinReadable, this, 
+            NULL, NULL, NULL, NULL)){
         MDS_ERR_OUT(ERR_STDOUT_BUF_EXIT, "\n");
     }
-    if(CFFdeventInit(&this->stdoutEvt, 1, NULL, NULL, 
-			    MDSCtlStdoutWriteable, this,
-			    NULL, NULL)){
+    if(CFFdeventInit(&this->stdoutEvt, 1, 
+            NULL, NULL, "MdsCtlstdoutWrEvt",
+            MDSCtlStdoutWriteable, this, 
+            NULL, NULL)){
         MDS_ERR_OUT(ERR_STDIN_EVT_EXIT, "\n");
     }
     if(CFFdeventsInit(&this->events)){
@@ -242,7 +246,9 @@ int MDSCtlRun(MDSCtl* this, const char* elem, const char* msg)
         this->status = MDS_CTL_ST_READ_STDIN;
         return CFFdeventsLoop(&this->events);
     } else {
+        MDS_DBG("\n");
         MDSCtlRequest(this, elem, msg);
+        MDS_DBG("\n");
         return (CFBufferGetSize(&this->cmdCtl.response.body)
                 !=write(1, CFBufferGetPtr(&this->cmdCtl.response.body), CFBufferGetSize(&this->cmdCtl.response.body)));
     }

@@ -1,0 +1,9 @@
+#ifndef _MDS_MSG_V4L2_CTL_
+#define _MDS_MSG_V4L2_CTL_
+
+#define MDS_MSG_TYPE_V4L2_CTL	"V4L2_CTL"
+
+#define MDS_MSG_V4L2_CTL_STREAMON	0
+#define MDS_MSG_V4L2_CTL_STREAMOFF	1
+
+#endif

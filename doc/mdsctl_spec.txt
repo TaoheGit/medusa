@@ -1,0 +1,348 @@
+How to use mdsctl
++++++++++++++++++
+mdsctl <element> <command>
+E.G.
+    mdsctl car0 '{"move": "head_up"}'
+
+commands acceptable 
++++++++++++++++++++
+
+Car Movement
+============
+(move)
+[request]
+{
+    "move": "forward | backward | spin_left | spin_right | turn_left | turn_right | stop | brake \
+         | head_up | head_down | head_stop \
+         | head_spin_up | head_spin_down | head_spin_stop \
+         | body_spin_left | body_spin_right | body_spin_middle "
+    "speed": 0-100,
+    "radius": 0-100,
+    "distance": 100,
+    "last": 1000
+}
+
+[response]
+{
+	"ret": "ok | fail"
+}
+
+(disable move action)
+[request]
+{
+    "disable_movement":"forward | backward | spin_left | spin_right | turn_left | turn_right \
+         | head_up | head_down  \
+         | head_spin_up | head_spin_down | head_spin_middle \
+         | body_spin_left | body_spin_right | body_spin_middle"
+}
+
+[response]
+{
+    "ret": "ok | fail"
+}
+
+(enable move action)
+[request]
+{
+    "enable_movement":"forward | backward | spin_left | spin_right | turn_left | turn_right \
+         | head_up | head_down \
+         | head_spin_up | head_spin_down | head_spin_middle \
+         | body_spin_left | body_spin_right | body_spin_middle"
+}
+
+[response]
+{
+    "ret": "ok | fail"
+}
+
+
+XMPP client
+===========
+1) Mesage
+
+[request]
+{
+    "todo": "message",
+    "to": "CrazyPandar@gmail.com",
+    "msg": "Hello RD2"
+}
+
+[response]
+{
+	"ret": "ok | fail"
+}
+
+2) presense
+[request]
+{
+    "todo": "presense",
+    "to":"",    ;Optional
+    "show": "available|chat|away|dnd|xa",
+    "status": "Enjoy inteligent life!"      ;Optional
+}
+
+[response]
+{
+	"ret": "ok | fail"
+}
+
+3) IQ
+[request]
+{
+	"todo": "iq",
+	"to": "kerry@gmail.com/xxx",
+	"iq": "xxxxxx"
+}
+[response]
+{
+	"ret": "ok | fail"
+}
+
+4) PLOT
+[request]
+{
+	"todo": "plot",
+	"to": "kerry@gmail.com/xxx",
+	"plot": "plot command"
+}
+[response]
+{
+	"ret": "ok | fail"
+}
+
+V4L2
+====
+(drop frame)
+[request]
+{
+    "drop_frame":4	;Get 1 frame every 4 frame
+}
+
+[response]
+{
+	"ret": "ok | fail"
+}
+
+(stream on/off)
+[request]
+{
+    "stream_on":0 | 1	; 0:off, 1:on
+}
+
+[response]
+{
+	"ret": "ok | fail"
+}
+
+Davinci video encoder
+=====================
+[request]
+{
+    "bit_rate":6000000,
+    "idr_frame_interval":300
+}
+
+[response]
+{
+	"ret": "ok | fail"
+}
+
+AnBao MMI interface
+===================
+(Display)
+[request]
+{
+	"air_quality":{
+		"current":0-1024,
+		"trend":0-100
+	},
+	"time":"year-month-day hour:minute",
+	"alarm":{
+		"type": "falling | noPairl | wheelLocked | clear",
+		"action": "toggle | clear"
+	},
+	"air_clean_mode":{
+		"type": "spot | clever | smart | stop | demo"
+	},
+	"schedule": {
+		"time": "hour:",
+		"mode":"oneshot | loop | disable"
+	},
+	"charge":"going | charging | IDLE",
+	"battery":0-100,
+    "power":{
+        "action": "down | reset",
+        "delay": 60
+    },
+    "led": {
+        "id": 0-10,
+        "blink":"ON | OFF | SHORT | LONG | SHORT-LONG"
+    }
+}
+
+[response]
+{
+    "ret": "ok | fail"
+}
+
+(air quality)
+[request]
+{
+    "request": "air_quality",
+}
+
+[response]
+{
+    "ret": "ok",
+    "air_quality": {
+        "current": 0-1024
+    }
+}
+
+(temperature)
+[request]
+{
+    "request": "temperature",
+}
+[response]
+{
+    "ret":"ok",
+    "temperature": -127-+128
+}
+
+(wet)
+[request]
+{
+    "request": "wet",
+}
+[response]
+{
+    "ret":"ok",
+    "wet": 0-100
+}
+
+(environment)
+[request]
+{
+    "request": "environment"
+    
+}
+[response]
+{
+    "ret": "ok",
+    "air_quality": {
+        "current": 0-1024
+    },
+    "temperature": -127-+128,
+    "wet": 0-100
+}
+
+(internet things)
+[request]
+{
+    "request": "tiot",  /* the internet of things */
+    "action": "add_dev | del_dev | get_dev_list | control_dev | get_dev_info",
+    "id":"21:aa:00:00:00:c8",
+    "control_info": {
+        "type": "smart_slot | alive_detector | smoke_detector",
+        "on": true;
+    }
+}
+
+[response]
+{
+    "ret": "ok | fail"
+}
+
+
+(power interface)
+[request]
+{
+    "request":"power"
+}
+
+[response]
+{
+    "ret":"ok",
+    "power":{
+        "source":"ac | battery",
+        "current":0-100
+    }
+}
+
+system plugin
+===================
+(GET Firmware information interface)
+[request]
+{
+	"fw_info":"get_all "
+}
+
+[response]
+{
+	"ret": "ok",
+	"fwVer": "0.1.0",
+	"fwFix": 1,
+}
+
+(GET PID interface)
+[request]
+{
+	"pid_get":"get_sn | get_product | get_hw_ver | get_mach_pwd | get_sales_sn | get_all"
+}
+
+[response]
+{
+	"ret": "ok",
+	"sn": 1,
+	"product": 1,
+	"hw_ver": "1.0",
+	"mach_pwd": "00112233445566778899",
+	"sales_sn": "012345678912345678",
+	"wifi_mac": "00:11:22:33:44:55"
+}
+
+(SET PID)
+[request]
+{
+	"pid_set": {
+		"sn": 1,
+		"product": 1,
+		"hw_ver": "1.0",
+		"mach_pwd": "00112233445566778899",
+		"sales_sn": "012345678912345678",
+		"wifi_mac": "00:11:22:33:44:55"
+	}
+}
+
+[response]
+{
+	"ret": "ok"
+}
+
+dm365_adc interface
+====================
+(Get adc value)
+[request]
+{
+    "request": "ADC",
+    "channels": [0, 1]
+}
+
+[response]
+{
+    "ADC" : [
+        {
+            "channel": 0,
+            "value": 512
+        },
+        {
+            "channel": 1,
+            "value": 512
+        }
+    ]
+}
+
+
+anbao action interface
+======================

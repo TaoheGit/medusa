@@ -469,15 +469,18 @@ static int XCElemIqGetHook(void* pXc, ikspak *pak)
 
 static void scheduleStart(MdsXCElem* xcEm)
 {
-    struct timeval tv;
+    struct itimerspec ts;
     
     MDS_DBG("Will retry login XMPP account: %s@%s in 5 seconds\n", XCGetUser(&xcEm->xc), XCGetDomain(&xcEm->xc));
-    memset(&tv, 0, sizeof(tv));
-    tv.tv_sec = 5;
-    CFTimerAdd(&xcEm->xcStartTmr, &tv);
+    memset(&ts, 0, sizeof(ts));
+    ts.it_value.tv_sec = 5;
+    ts.it_value.tv_nsec = 0;
+    ts.it_interval.tv_sec = 0;
+    ts.it_interval.tv_nsec = 0;
+    CFTimerModTime(&xcEm->xcStartTmr, 5, 0, 0, 0);
 }
 
-static void startTimerHndl(void* data)
+static void startTimerHndl(CFTimer* tmr, void* data)
 {
     MdsXCElem *xcEm;
     
@@ -590,7 +593,8 @@ static MDSElem* _XCElemRequested(MDSServer* svr, CFJson* jConf)
             IKS_RULE_DONE);
     MDS_DBG("startTimerHndl=%x, xcEm=%x\n", (int)startTimerHndl, (int)xcEm);
     
-    if (CFTimerInit(&xcEm->xcStartTmr, startTimerHndl, xcEm)) {
+    if (CFTimerInitStopped(&xcEm->xcStartTmr, "xmpp restart timer", 
+            startTimerHndl, xcEm, NULL)) {
         MDS_ERR_OUT(ERR_EXIT_XC, "\n");
     }
     if (MDSElemInit((MDSElem*)xcEm, svr, &_XCClass, name, __MdsXCProcess,

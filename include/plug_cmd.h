@@ -27,5 +27,5 @@ typedef struct mds_cmd_msg {
     CFBuffer* reqBuf;
     CFBuffer* respBuf;
 }MdsCmdMsg;
-
+#define MDS_DBG_CMD_SVR "MDS_DBG_CMD_SVR"
 #endif

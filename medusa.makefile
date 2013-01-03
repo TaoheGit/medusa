@@ -16,7 +16,7 @@ else
 endif
 
 ifeq ($(DEBUG),y)
-CFLAGS += -g -O3
+CFLAGS += -g
 LDFLAGS += -g
 else
 CFLAGS += -s -O3
@@ -43,10 +43,13 @@ endif
 $(TARGET).$(VER):$(OBJS)
 	$(CC) -rdynamic $(LDFLAGS) -ldl -o $@ $^
 
+_INST_DIR =  ${DEST_DIR}/$(prefix)
 install:
 	mkdir -p $(prefix)/bin
-	cp -af ${TARGET} ${TARGET}.${VER} $(prefix)/bin
-	
+	cp -af ${TARGET} ${TARGET}.${VER} ${_INST_DIR}/bin
+	install -D doc/mdsctl_spec.txt ${_INST_DIR}/share/doc/medusa/mdsctl_spec.txt
+	cp -dfR include ${_INST_DIR}/
+    
 uninstall:
 	rm -rf $(prefix)/bin/${TARGET} $(prefix)/bin/${TARGET}.$(VER)
 

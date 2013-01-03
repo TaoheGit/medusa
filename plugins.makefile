@@ -25,7 +25,7 @@ endif
 ###################################################
 TARGET = plug_cmd.so plug_v4l2.so plug_rtp_sink.so plug_file_sink.so 
 TARGET += plug_raw_img_soft_conv.so plug_xmpp.so plug_gpio.so
-TARGET += plug_input.so
+TARGET += plug_input.so plug_cmd_ctl.so
 OBJS = 
 CFLAGS += $(CFLAGS_LIBCHUNFENG) -Wno-unused-label
 

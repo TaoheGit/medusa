@@ -51,9 +51,9 @@ static int CmdPlugExit(MDSPlugin* this, MDSServer* svr);
 static MDSElem* _CmdElemRequested(MDSServer* svr, CFJson* jConf);
 static int _CmdElemReleased(MDSElem* elem);
 MdsElemClass _CmdClass = {
-        .name = MDS_CMD_ELEM_CLASS_NAME,
-        .request = _CmdElemRequested,
-        .release = _CmdElemReleased
+    .name = MDS_CMD_ELEM_CLASS_NAME,
+    .request = _CmdElemRequested,
+    .release = _CmdElemReleased
 };
 
 MDSCmdPlug cmd = {
@@ -133,7 +133,7 @@ int MDSCmdElemProcess(MDSElem* this, MDSElem* vendor, MdsMsg* msg)
                 CFBufferCat(respBuf, CF_CONST_STR_LEN("("));
                 tmpCStr = ((MDSElem*)(node->data))->class->name;
                 CFBufferCat(respBuf, tmpCStr, strlen(tmpCStr));
-                CFBufferCat(respBuf,  CF_CONST_STR_LEN(")\n"));
+                CFBufferCat(respBuf, CF_CONST_STR_LEN(")\n"));
             }
         } else if (!strncmp(cmdStrPtr, "elem_info", sizeof("elem_info")-1)) {
             MDSElem* elem;
@@ -202,15 +202,22 @@ int MDSCmdElemProcess(MDSElem* this, MDSElem* vendor, MdsMsg* msg)
     return 0;
 }
 
-static int MDSCmdConnProcessRequest(CFBuffer* reqBuf, CFBuffer* respBuf, void* usrData)
+static int MDSCmdConnProcessRequest(CFCmdSvrDataConn* dc, CFBuffer* reqBuf, CFBuffer* respBuf, void* usrData)
 {
     MDSElem *cmdElem;
     int ret = 0;
     MdsCmdMsg msg;
     const char* to;
-
+    
+    if (dc->status == CF_CMD_SVR_DATA_CONN_ST_READ_REQ_VER) {
+        MDS_DBG("CmdClient closed conn\n!");
+        return 0;
+    } else if (dc->status != CF_CMD_SVR_DATA_CONN_ST_PROCESS) {
+        MDS_ERR("MDSCmdConnProcessRequest(), status!=CF_CMD_SVR_DATA_CONN_ST_PROCESS\n");
+        return -1;
+    }
     cmdElem = usrData;
-    msg.cmd = strchr(CFBufferGetPtr(reqBuf), '\0');
+    msg.cmd = memchr(CFBufferGetPtr(reqBuf), '\0', CFBufferGetSize(reqBuf));
     msg.cmd ++;
     msg.cmdLen = CFBufferGetSize(reqBuf) - (msg.cmd - (char*)CFBufferGetPtr(reqBuf));
     msg.reqBuf = reqBuf;
@@ -221,8 +228,12 @@ static int MDSCmdConnProcessRequest(CFBuffer* reqBuf, CFBuffer* respBuf, void* u
         CFBufferCat(respBuf, to, strlen(to));
         CFBufferCat(respBuf, CONST_STR_LEN("\n"));
     } else {
+        CFEnvDbg(MDS_DBG_CMD_SVR, "CMD_SVR_REQ: %s\n", msg.cmd);
         ret = MDSElemSendMsg(cmdElem, to, MDS_MSG_TYPE_CMD, &msg);
     }
+    if (!CFBufferGetSize(respBuf)) {
+		CFBufferCp(respBuf, CF_CONST_STR_LEN("unknown error\n"));
+	}
     return ret;
 }
 

@@ -134,6 +134,7 @@ MDSElem* MDSElemRef(MDSElem* elem);
 int MDSElemGetRefCount(MDSElem* elem);
 BOOL MDSElemUnref(MDSElem* elem);
 void MDSElemUnrefAndSetNull(MDSElem** elem);
+#define MDSElemGetServer(__elem)    (__elem->server)
 
 #endif
 

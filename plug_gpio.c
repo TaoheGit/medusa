@@ -93,12 +93,12 @@ static int __MdsGpioAddAsGuest(MDSElem* this, MDSElem* vendor);
 static int __MdsGpioAddAsVendor(MDSElem* this, MDSElem* guestElem);
 static int __MdsGpioRemoveAsGuest(MDSElem* this, MDSElem* vendor);
 static int __MdsGpioRemoveAsVendor(MDSElem* this, MDSElem* guestElem);
-
-void phase1OverHndl(void* data)
+static void phase2OverHndl(CFTimer* tmr, void* data);
+void phase1OverHndl(CFTimer* tmr, void* data)
 {
 	MdsGpioElem *giE;
 	const char *vc;
-	struct timeval tv;
+	struct itimerspec ts;
 	
 	//MDS_DBG("\n");
 	assert(data);
@@ -109,13 +109,16 @@ void phase1OverHndl(void* data)
 		vc = "1\n";
 	}
 	write(giE->fd, vc, strlen(vc));
-	memset(&tv, 0, sizeof(tv));
-	tv.tv_sec = (giE->u_output.phase2Period/1000);
-	tv.tv_usec = (giE->u_output.phase2Period%1000)*1000;
-	CFTimerAdd(&giE->u_output.phase2Timer, &tv);
+	memset(&ts, 0, sizeof(ts));
+    ts.it_value.tv_sec = (giE->u_output.phase2Period/1000);
+    ts.it_value.tv_nsec = (giE->u_output.phase2Period%1000)*1000000;
+    ts.it_interval.tv_sec = 0;
+    ts.it_interval.tv_nsec = 0;
+    CFTimerMod(&giE->u_output.phase2Timer, 
+            phase2OverHndl, &ts, NULL);
 }
 
-void phase2OverHndl(void* data)
+void phase2OverHndl(CFTimer* tmr, void* data)
 {
 	MdsGpioElem *giE;
 	const char *vc;
@@ -140,7 +143,10 @@ void phase2OverHndl(void* data)
 	memset(&tv, 0, sizeof(tv));
 	tv.tv_sec = giE->u_output.phase1Period/1000;
 	tv.tv_usec = (giE->u_output.phase1Period%1000)*1000;
-	CFTimerAdd(&giE->u_output.phase1Timer, &tv);
+	CFTimerModTime(&giE->u_output.phase1Timer, 
+            giE->u_output.phase1Period/1000, 
+            (giE->u_output.phase1Period%1000)*1000000,
+            0, 0);
 }
 
 #define MDS_GIO_VALUE_FILE_PATTERN	"/sys/class/gpio/gpio%d/value"
@@ -175,14 +181,16 @@ static int MdsGpioOutputElemInit(MdsGpioElem* giE, MDSServer* svr, const char* n
 		MDS_ERR_OUT(ERR_OUT, "\n");
 	}
 	
-	if (CFTimerInit(&giE->u_output.phase1Timer, phase1OverHndl, giE)) {
+	if (CFTimerInitStopped(&giE->u_output.phase1Timer, "gpio phase 1 over timer", 
+            phase1OverHndl, giE, NULL)) {
 		MDS_ERR_OUT(ERR_CLOSE_FD, "\n");
 	}
 	
-	if (CFTimerInit(&giE->u_output.phase2Timer, phase2OverHndl, giE)) {
+	if (CFTimerInitStopped(&giE->u_output.phase2Timer, "gpio phase 2 over timer", 
+            phase2OverHndl, giE, NULL)) {
 		MDS_ERR_OUT(ERR_EXIT_TMR1, "\n");
 	}
-	phase2OverHndl(giE);
+	phase2OverHndl(&giE->u_output.phase2Timer, giE);
 	if (MDSElemInit((MDSElem*)giE, svr, &_GpioClass, name, __MdsGpioProcess,
                     __MdsGpioAddAsGuest, __MdsGpioAddAsVendor,
                     __MdsGpioRemoveAsGuest, __MdsGpioRemoveAsVendor)) {
@@ -211,7 +219,7 @@ static int MdsGpioOutputElemExit(MdsGpioElem* giE)
 
 static int MdsGpioOutputElemStart(MdsGpioElem* giE)
 {
-	phase2OverHndl(giE);
+	phase2OverHndl(&giE->u_output.phase2Timer, giE);
 	return 0;
 }
 
@@ -395,7 +403,7 @@ static int MdsGpioInputElemInit(MdsGpioElem* giE, MDSServer* svr, const char* na
 	if (giE->fd < 0) {
 		MDS_ERR_OUT(ERR_OUT, "\n");
 	}
-	if (CFFdeventInit(&giE->u_input.valueEvt, giE->fd, 
+	if (CFFdeventInit(&giE->u_input.valueEvt, giE->fd, "GpioInTrigEvt", 
 			NULL, NULL, 
 			NULL, NULL, 
 			_gioValueReadable, giE)) {

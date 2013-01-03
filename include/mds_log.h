@@ -22,8 +22,10 @@
 
 #ifdef _DEBUG_
 #define MDS_DBG CF_DBG
+#define MDS_DBG_N() printf("[D][%s:%d]%s()\n", __FILE__, __LINE__, __FUNCTION__)
 #else
 #define MDS_DBG(...)
+#define MDS_DBG_N()
 #endif
 #define MDS_MSG CF_MSG
 #define MDS_ERR CF_ERR

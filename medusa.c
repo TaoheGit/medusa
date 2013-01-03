@@ -39,9 +39,6 @@ static int MDSSigFdReadable(CFFdevents* events, CFFdevent* event, int fd, void* 
             break;
         case SIGPIPE:
             break;
-        case SIGALRM:
-            CFTimersTrigger();
-            break;
         default:
             MDS_ERR("unknown signal, should not be here\n");
             break;
@@ -58,7 +55,7 @@ int MDSServerInit(MDSServer* this, const char* cfgFile)
     memset(this, 0, sizeof(MDSServer));
     this->elements = NULL;
     this->elemClasses = NULL;
-    this->fdevents = cf_fdevents_new();
+    this->fdevents = CFFdeventsNew();
     if(!this->fdevents){
         MDS_ERR("\n");
         goto ERR_OUT;
@@ -67,7 +64,7 @@ int MDSServerInit(MDSServer* this, const char* cfgFile)
         MDS_ERR("\n");
         goto ERR_FREE_FDEVENTS;
     }
-    if(CFFdeventInit(&this->sigFdEvent, sigFd, 
+    if(CFFdeventInit(&this->sigFdEvent, sigFd, "SigFdRdEvt",
                 MDSSigFdReadable, (void*)this, 
                 NULL, NULL,
                 NULL, NULL)){
@@ -106,7 +103,7 @@ int MDSServerInit(MDSServer* this, const char* cfgFile)
         MDS_ERR("Load plugins failed\n");
         goto ERR_FREE_SVR_PLUG_PATH;
     }
-    if (CFTimerSystemInit(-1)) {
+    if (CFTimerSystemInit(this->fdevents)) {
         MDS_ERR_OUT(ERR_RM_PLUGS, "CFTimerSystemInit() failed\n");
     }
     assert(this->elemClasses);
@@ -136,6 +133,7 @@ ERR_OUT:
 
 int MDSServerExitEventLoop(MDSServer* this)
 {
+    MDS_MSG("==>MDSServerExitEventLoop()\n");
     CFFdeventsDelAll(this->fdevents);
     return 0;
 }
@@ -158,7 +156,7 @@ int MDSServerExit(MDSServer* this)
 
 void usage()
 {
-    printf("Usage: %s <-f PLUG_DIR>\n", "medusa");
+    printf("Usage: %s [-b] <-f PLUG_DIR>\n", "medusa");
 }
 
 int MDSElemInit(MDSElem* this, MDSServer* server, MdsElemClass* class, const char* name,
@@ -649,7 +647,7 @@ int MDSGetPidFileAndLockPort(const char* cfgFile, CFString* pidFileStr, int* loc
         goto ERR_FREE_CONF_STRING;
     }
     gConf = CFJsonParse(cf_string_get_str(gConfigString));
-    if(!gConf){
+    if (!gConf) {
         MDS_ERR("Parse json config file: %s failed\n", cfgFile);
         goto ERR_FREE_CONF_STRING;
     }
@@ -683,17 +681,20 @@ ERR_OUT:
 
 int main(int argc, char** argv)
 {
-    int opt;
-    int lockPort;
-    CFString pidFileStr;
+    static int opt;
+    static int lockPort;
+    static CFString pidFileStr;
     const char *cfgFile = NULL, *pidFile;
     static MDSServer server;
-    CFJson *elems;
-    CFString tmpStr, tmpStr2;
-    CFJson *chains;
+    static CFJson *elems;
+    static CFString tmpStr, tmpStr2;
+    static CFJson *chains;
+    static BOOL backGround = FALSE;
 
-    while((opt = getopt(argc, argv, "f:"))!=-1){
+    while ((opt = getopt(argc, argv, "bf:"))!=-1) {
         switch(opt){
+            case 'b':
+                backGround = TRUE;
             case 'f':
                 cfgFile = optarg;
                 break;
@@ -702,58 +703,62 @@ int main(int argc, char** argv)
                 goto ERR_EXIT_TMP_STR2;
         }
     }
+    
     if (!cfgFile) {
-    MDS_ERR_OUT(ERR_OUT, "Please specify config file for medusa.\n")
+        MDS_ERR_OUT(ERR_OUT, "Please specify config file for medusa.\n")
     }
+    
     if (CFStringInit(&tmpStr, "")) {
         MDS_ERR_OUT(ERR_OUT, "\n");
     }
+    
     if (CFStringInit(&tmpStr2, "")) {
         MDS_ERR_OUT(ERR_EXIT_TMP_STR, "\n");
     }
-    if(CFStringInit(&pidFileStr, "")){
+    
+    if (CFStringInit(&pidFileStr, "")) {
         MDS_ERR_OUT(ERR_EXIT_TMP_STR2, "\n");
     }
-    if(MDSGetPidFileAndLockPort(cfgFile, &pidFileStr, &lockPort)){
+    
+    if (MDSGetPidFileAndLockPort(cfgFile, &pidFileStr, &lockPort)) {
         MDS_ERR_OUT(ERR_EXIT_TMP_STR2, "\n");
     }
-    if(!(pidFile=CFStringGetStr(&pidFileStr)) || !*pidFile){
+    
+    if (!(pidFile=CFStringGetStr(&pidFileStr)) || !*pidFile) {
         MDS_ERR_OUT(ERR_EXIT_PID_STR, "\n");
     }
-
-#if 0
-    if(CFDaemon(pidFile, lockPort)){
-       if(CFErrno == CF_ERR_FORCE_EXTI){
-            MDS_MSG("Medusa exit manually.\n");
-            CFStringExit(&pidFileStr);
-            return 0;
-        }else if(CFErrno == CF_ERR_RUNNING){
-            MDS_ERR_OUT(ERR_EXIT_PID_STR, "Medusa already running. Exit ...\n");
-        }else{
-            MDS_ERR_OUT(ERR_EXIT_PID_STR, "Daemon error. Exit ...\n");
-        }
-    }
-#endif
-
+    
     CFPrintSysInfo(1);
     MDS_DBG("cfgFile: %s\n", cfgFile);
-    if(MDSServerInit(&server, cfgFile)){
+    
+    if (MDSServerInit(&server, cfgFile)) {
         MDS_ERR("Init server failed\n");
         goto ERR_EXIT_PID_STR;
     }
+    
+    if (backGround && CFDaemon(pidFile, lockPort)) {
+       if (CFErrno == CF_ERR_FORCE_EXTI) {
+            MDS_MSG("Medusa exit manually.\n");
+            CFStringExit(&pidFileStr);
+            return 0;
+        } else {
+            MDS_ERR_OUT(ERR_EXIT_SERVER, "Daemon unknown error. Exit ...\n");
+        }
+    }
+    
     if ((elems=CFJsonObjectGet(server.gConf, "elements"))) {
         MDS_DBG("\n");
         const char* cls;
         CFJsonForeach(elems, elemConf) {
             if ((cls = CFJsonObjectGetString(elemConf, "class"))) {
                 if (!MDSServerRequestElem(&server, cls, elemConf)) {
-                    MDSServerReleaseAllElems(&server);
-                    MDS_ERR_OUT(ERR_EXIT_PID_STR, "Request initial chain elements failed\n");    
+                    MDS_ERR_OUT(ERR_RELEASE_ALL_ELEM, "Request initial chain elements failed\n");    
                 }
             }
         }
     }
-    if ((chains=CFJsonObjectGet(server.gConf, "chains"))) {
+    
+    if ((chains = CFJsonObjectGet(server.gConf, "chains"))) {
         CFJsonArrayForeach(chains, chain) {
             CFJsonArrayForeach(chain, elemNameObj) {
                 CFJson* nextElemNameObj;
@@ -762,23 +767,32 @@ int main(int argc, char** argv)
                             && (nextElemNameObj=CFJsonNext(elemNameObj))
                             && (gName=CFJsonStringGet(nextElemNameObj))) {
                     if (MDSServerConnectElemsByName(&server, vName, gName)) {
-                        MDSServerReleaseAllElems(&server);
-                        MDS_ERR_OUT(ERR_EXIT_PID_STR, "Connect initial chains failed\n"); 
+                        MDS_ERR_OUT(ERR_DISCONNECT_ALL_ELEMS, "Connect initial chains failed\n"); 
                     }
                 }
             }
         }
     }
+    
     MDSServerRun(&server);
     MDSServerDisConnectAllElems(&server);
     MDSServerReleaseAllElems(&server);
+    remove(pidFile);
     MDSServerExit(&server);
     CFStringExit(&pidFileStr);
     CFStringExit(&tmpStr2);
     CFStringExit(&tmpStr);
-    MDS_DBG("main()===>\n");
+    MDS_DBG("main()===>0\n");
     return 0;
 
+ERR_DISCONNECT_ALL_ELEMS:
+    MDSServerDisConnectAllElems(&server);
+ERR_RELEASE_ALL_ELEM:
+    MDSServerReleaseAllElems(&server);
+ERR_DEL_PID_FILE:
+    remove(pidFile);
+ERR_EXIT_SERVER:
+    MDSServerExit(&server);
 ERR_EXIT_PID_STR:
     CFStringExit(&pidFileStr);
 ERR_EXIT_TMP_STR2:
